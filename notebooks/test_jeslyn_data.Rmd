@@ -1,0 +1,84 @@
+---
+title: "EC4362 - LFS Exploratory Analysis"
+output: html_document
+---
+
+## Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+library(here)
+source(here("setup.R"))
+source(here("functions", "data_cleaners.R"))
+source(here("functions", "lfs_panel.R"))
+
+```
+
+```{r}
+aps2019 <- read_csv("../data/aps2019_shrunk_decoded.csv") %>%
+  mutate(native = BIRTHCTRY_LABEL=="UK",
+         EU = str_detect(BIRTHCTRY_LABEL, "EU"), 
+         non_EU = !native & !EU & !is.na(BIRTHCTRY_LABEL)) %>% 
+  group_by(REGION) %>%
+  summarise(
+    native_share = sum(native, na.rm = TRUE),
+    EU_share = sum(EU, na.rm = TRUE),
+    non_EU_share = sum(non_EU, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  glimpse
+
+
+aps2021 <- read_csv("../data/aps2021_shrunk_decoded.csv") %>%
+  mutate(native = BIRTHCTRY_LABEL=="UK",
+         EU = str_detect(BIRTHCTRY_LABEL, "EU"), 
+         non_EU = !native & !EU & !is.na(BIRTHCTRY_LABEL)) %>% 
+  group_by(REGION) %>%
+  summarise(
+    native_share = sum(native, na.rm = TRUE),
+    EU_share = sum(EU, na.rm = TRUE),
+    non_EU_share = sum(non_EU, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  left_join(aps2019, by = "REGION", suffix = c(".19", ".21")) %>%
+  glimpse
+```
+```{r}
+library(tidyverse)
+
+df_change <- aps2021 %>%
+  pivot_longer(
+    cols = -REGION,
+    names_to = c("category", "year"),
+    names_pattern = "(.*)_share\\.(19|21)",
+    values_to = "share"
+  ) %>%
+  pivot_wider(
+    names_from = year,
+    values_from = share
+  ) %>%
+  mutate(
+    change = ((`21` - `19`)/`19`)* 100,
+    category = factor(
+      category,
+      levels = c("native", "EU", "non_EU")
+    )
+  )
+
+ggplot(df_change, aes(
+  x = reorder(REGION, change),
+  y = change,
+  fill = category
+)) +
+  geom_col(position = "dodge") +
+  coord_flip() +
+  geom_hline(yintercept = 0, linetype = "dashed") +
+  labs(
+    title = "Change in Population Composition by Region",
+    subtitle = "2019–2021",
+    x = NULL,
+    y = "Change (percentage points)",
+    fill = "Birthplace"
+  ) +
+  theme_minimal()
+```
+

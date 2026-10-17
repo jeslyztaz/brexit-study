@@ -9,26 +9,163 @@ output: html_document
 ```{r setup, message=FALSE, warning=FALSE}
 library(here)
 source(here("setup.R"))
+source(here("functions", "data_cleaners.R"))
+source(here("functions", "lfs_panel.R"))
+
 ```
 
 ## Import Data
+```{r}
+path <- here(
+  "data", "quarterly_lfs_raw", "UKDA-9569-tab", "tab",
+  "lfsp_jm26_eul_pwt24.tab"
+)
 
-```{r import}
-lfs <- readRDS("data/processed/lfs_analysis.rds")
+lfs_raw <- read.delim(path, header = TRUE)
+lfs_shrunk <- shrink_lfs_cs(lfs_raw)
+lfs <- decode_lfs_cs(lfs_shrunk)
 
-head(lfs)
+dim(lfs_raw)
+dim(lfs)
+attr(lfs, "source_variables")
+
+```
+## Explore Data
+```{r}
+count(lfs, SEX, SEX_LABEL)
+count(lfs, ACTIVITY, ACTIVITY_LABEL)
+count(lfs, ETHNICITY, ETHNICITY_LABEL)
+count(lfs, QUALGRP, QUALGRP_LABEL)
+count(lfs, OCCUGRP, OCCUGRP_LABEL)
+count(lfs, REGION, REGION_LABEL)
+count(lfs, BIRTH_MAIN, BIRTH_MAIN_LABEL)
 ```
 
-## Exploratory Analysis
-
-```{r summary}
-summary(lfs)
+```{r}
+lfs %>%
+  summarise(across(everything(), ~ mean(is.na(.x)))) %>%
+  pivot_longer(everything(), names_to = "variable", values_to = "share_na") %>%
+  arrange(desc(share_na))
 ```
 
-## Visualisation
+```{r}
+ggplot(lfs, aes(x = AGE)) +
+  geom_histogram(bins = 30) +
+  labs(x = "Age", y = NULL, title = "January–March 2026")
 
-```{r plot}
+```
 
-ggplot(lfs, aes(x = age)) +
-  geom_histogram(bins = 30)
+## Test the residence-quarter panel
+
+This is the same build as `pipeline/prep_data.R`: calendar quarters from 2014 onward. A file in that window which is not `jm`, `aj`, `js`, or `od` stops the build.
+
+```{r}
+panel <- build_residence_quarter_panel(
+  here("data", "quarterly_lfs_raw"),
+  from_year = 2014L
+)
+
+out <- here("data", "processed", "residence_quarter_panel.csv")
+dir.create(dirname(out), recursive = TRUE, showWarnings = FALSE)
+readr::write_csv(panel, out)
+
+dim(panel)
+count(panel, year, quarter, quarter_code)
+count(panel, residence)
+```
+
+```{r, fig.height=2}
+# UK-born, EU-born, and non-EU-born. CRYOX7 through 2017 Q2, then the
+# same three groups from CRYOX7_EUL_Main.
+birth <- panel %>%
+  transmute(
+    residence,
+    year,
+    quarter,
+    time = year + (quarter - 1) / 4,
+    `UK-born` = 100 * share_birth_uk,
+    `EU-born` = 100 * share_birth_eu,
+    Other = 100 * (share_birth_other_europe+share_birth_asia+ share_birth_rest)
+  )
+
+birth_new <- birth %>%
+  mutate(EU_born_ratio = `EU-born`/`UK-born`, 
+         non_EU_born_ratio = Other/`UK-born`) %>%
+  glimpse
+
+birth_long <- birth_new %>%
+  pivot_longer(
+    c(EU_born_ratio,non_EU_born_ratio),
+    names_to = "origin",
+    values_to = "ratio"
+  ) %>% glimpse
+
+for (area in unique(birth$residence)) {
+  print(
+    ggplot(filter(birth_long, residence == area), aes(time, ratio, colour = origin)) +
+      geom_vline(xintercept = 2021, linewidth = 0.3) +
+      geom_line() +
+      labs(title = area, x = NULL, y = "Percent", colour = NULL)
+  )
+}
+
+
+```
+
+```{r}
+# First stage after 2020 Q4.
+# Endogenous: change in the non-EU/native ratio from the previous quarter.
+#   non_EU_born_ratio is non-EU-born / UK-born.
+# Instrument: that area's average ratio over 2017-2019, times the national
+#   change in the same ratio. The national ratio is the population-weighted
+#   total. This is the one-group version of the Dustmann, Frattini and
+#   Preston (2013) shift-share.
+# Jaeger, Ruist and Stuhler (2019): the baseline share does not change, so
+#   the shift-share is serially correlated. The lag of the instrument is
+#   included. Residence and quarter fixed effects. Standard errors clustered
+#   by residence area.
+# The last number is the cluster-robust F statistic on the current instrument.
+local_ratio <- birth_new %>%
+  transmute(residence, year, quarter, time, ratio = non_EU_born_ratio) %>%
+  arrange(residence, year, quarter) %>%
+  group_by(residence) %>%
+  mutate(d_ratio = ratio - lag(ratio)) %>%
+  ungroup()
+
+national <- panel %>%
+  group_by(year, quarter) %>%
+  summarise(
+    national_ratio = sum(pop * (share_birth_other_europe+share_birth_asia+ share_birth_rest), na.rm = TRUE) /
+      sum(pop * share_birth_uk, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(year, quarter) %>%
+  mutate(
+    g = national_ratio - lag(national_ratio),
+    g_lag = lag(g)
+  )
+
+baseline <- local_ratio %>%
+  filter(year >= 2017, year <= 2019) %>%
+  group_by(residence) %>%
+  summarise(baseline = mean(ratio, na.rm = TRUE), .groups = "drop")
+
+post <- local_ratio %>%
+  filter(time > 2020 + 3 / 4) %>%
+  inner_join(baseline, by = "residence") %>%
+  inner_join(select(national, year, quarter, g, g_lag), by = c("year", "quarter")) %>%
+  mutate(
+    shift_share = baseline * g,
+    shift_share_lag = baseline * g_lag
+  )
+
+first_stage <- feols(
+  d_ratio ~ shift_share + shift_share_lag | residence + year^quarter,
+  data = post,
+  vcov = ~ residence
+)
+
+baseline
+summary(first_stage)
+coeftable(first_stage)["shift_share", "t value"]^2
 ```
