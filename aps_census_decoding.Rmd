@@ -1,0 +1,89 @@
+---
+title: "Untitled"
+output: html_document
+date: "2026-10-17"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r import libraries}
+library(tidyverse)
+library(readxl)
+```
+
+## Read in 2011 Census Data
+
+```{r}
+census <- read_xls("raws/census2011.xls", sheet = "QS203EW_Numbers", range = "A11:CD464") %>%
+  filter(!is.na(`Area code`)) %>%
+  rename(Region = `Area name`, County = `...3`, `Local authority` = `...4`) %>%
+  fill(Region, .direction = "down") %>%
+  group_by(Region) %>%
+  fill(County, .direction = "down") %>%
+  ungroup()
+```
+
+## Read in 2019 and 2021 APS Data
+
+```{r read in aps2019}
+aps2019 <- read.delim("raws/UKDA-8665-tab/tab/apsh_jd19_eul.tab", header = TRUE) %>%
+  select(AGE, SEX, GOR9D, CRYOX7_EUL_Sub, CAMEYR, CAMEYR2, HOURPAY, WRKING, QRTR, PHHWTA18)
+```
+
+```{r read in aps2021}
+aps2021 <- read.delim("raws/UKDA-9021-tab/tab/apsh_jd21_eul_phhwta22.tab", header = TRUE) %>%
+  select(AGE, SEX, GOR9D, CRYOX7_EUL_Sub, CAMEYR, CAMEYR2, HOURPAY, WRKING, QRTR, PHHWTA20)
+```
+
+## Data Decoding for APS
+
+```{r}
+decode_aps <- function(aps) {
+  aps_decoded <- aps %>%
+    rename(
+      REGIONCODE = GOR9D,
+      BIRTHCTRY = CRYOX7_EUL_Sub,
+      QTRJOINED = QRTR, # Quarter they joined survey
+      ) %>%
+    mutate(
+      across(where(is.numeric), ~ na_if(., -9)),
+      across(where(is.numeric), ~ na_if(., -8)),
+      REGION = case_when(
+        REGIONCODE == "E12000001" ~ "North East",
+        REGIONCODE == "E12000002" ~ "North West",
+        REGIONCODE == "E12000003" ~ "Yorkshire and The Humber",
+        REGIONCODE == "E12000004" ~ "East Midlands",
+        REGIONCODE == "E12000005" ~ "West Midlands",
+        REGIONCODE == "E12000006" ~ "East of England",
+        REGIONCODE == "E12000007" ~ "London",
+        REGIONCODE == "E12000008" ~ "South East",
+        REGIONCODE == "E12000009" ~ "South West",
+        REGIONCODE == "S99999999" ~ "Scotland",
+        REGIONCODE == "W99999999" ~ "Wales"),
+      SEX_LABEL = factor(SEX, levels = c(1, 2), labels = c("Male", "Female")),
+      BIRTHCTRY_LABEL = factor(
+        BIRTHCTRY,
+        levels = 1:15,
+        labels = c(
+          "UK", "EU15", "EU8", "EU2", "Other EU", "Other Europe", "Middle East and Central Asia",
+          "East Asia", "South Asia", "South East Asia", "Sub-Saharan Africa", "North Africa",
+          "North America", "Central and South America", "Oceania")),
+      WRKING_LABEL = factor(WRKING, levels = c(1, 2), labels = c("Yes", "No")),
+      QTRJOINED_LABEL = factor(QTRJOINED, levels = 1:4, 
+                               labels = c("Jan-Mar", "Apr-Jun", "Jul-Sep", "Oct-Dec"))
+    )
+  return(aps_decoded)
+}
+```
+
+```{r}
+aps2019_decoded <- decode_aps(aps2019)
+aps2021_decoded <- decode_aps(aps2021)
+```
+
+```{r}
+write.csv(aps2019_decoded, "data/aps2019_shrunk_decoded.csv", row.names = FALSE)
+write.csv(aps2021_decoded, "data/aps2021_shrunk_decoded.csv", row.names = FALSE)
+```
