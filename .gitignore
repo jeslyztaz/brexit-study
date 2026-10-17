@@ -17,13 +17,11 @@ renv/staging/
 # Raw and processed LFS data
 # ========================================
 data/quarterly_lfs_raw/*
-data/interim/*
-data/processed/*
+
 
 # Keep README files inside data folders
 !data/quarterly_lfs_raw/README.md
-!data/interim/README.md
-!data/processed/README.md
+
 
 # ========================================
 # R Markdown temporary outputs
