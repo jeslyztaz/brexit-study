@@ -18,11 +18,11 @@ renv/staging/
 # ========================================
 data/quarterly_lfs_raw/*
 
-data/aps2019_shrunk_decoded.csv
-data/aps2021_shrunk_decoded.csv
-data/lfs_apr18jun19_shrunk_decoded.csv
-data/lfs_jul19sep20_shrunk_decoded.csv
-data/lfs_oct20dec21_shrunk_decoded.csv
+data/processed/aps2019_shrunk_decoded.csv
+data/processed/aps2021_shrunk_decoded.csv
+data/processed/lfs_apr18jun19_shrunk_decoded.csv
+data/processed/lfs_jul19sep20_shrunk_decoded.csv
+data/processed/lfs_oct20dec21_shrunk_decoded.csv
 
 
 # Keep README files inside data folders
