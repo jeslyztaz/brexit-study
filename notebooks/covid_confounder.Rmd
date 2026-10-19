@@ -11,7 +11,7 @@ Caveats to state in the write-up:
 - Case counts are not comparable after spring 2022 (testing changed). Pre-2020 = 0; after 2022 cases = 0 and the indices are held at the 2022Q4 value (the four nations are identical from 2022Q2).
 
 ```{r covid-build}
-# Put OxCGRT_compact_subnational_v1.csv in project_dir (or edit the path).
+# Put OxCGRT_compact_subnational_v1.csv in project_dir.
 oxcgrt_file <- file.path(project_dir, "OxCGRT_compact_subnational_v1.csv")
 if (!file.exists(oxcgrt_file)) stop("Cannot find: ", oxcgrt_file)
 
