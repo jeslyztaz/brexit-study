@@ -1,0 +1,132 @@
+## 9. Covid confounder
+
+**Idea.** Covid affects wages and migration at the same time as Brexit. We build a
+time-varying Covid measure for each residence area and add it as a control, so the
+immigration coefficient is estimated *holding Covid conditions constant*. We use two measures:
+(i) the OxCGRT **stringency index** (policy), (ii) **new Covid cases per 100,000** (the professor's suggestion).
+
+Caveats to state in the write-up:
+- OxCGRT UK data are by **nation** (England, Scotland, Wales, N. Ireland). All 16 English areas share England's value, so there are only 4 distinct Covid series.
+- Quarter fixed effects already absorb anything common to all areas, so only the *differences across nations* identify the Covid coefficient.
+- Case counts are not comparable after spring 2022 (testing changed). Pre-2020 = 0; after 2022 cases = 0 and the indices are held at the 2022Q4 value (the four nations are identical from 2022Q2).
+
+```{r covid-build}
+# Put OxCGRT_compact_subnational_v1.csv in project_dir (or edit the path).
+oxcgrt_file <- file.path(project_dir, "OxCGRT_compact_subnational_v1.csv")
+if (!file.exists(oxcgrt_file)) stop("Cannot find: ", oxcgrt_file)
+
+# 20 residence areas -> UK nation
+crosswalk <- tibble::tribble(
+  ~residence, ~nation,
+  "Tyne & Wear", "England", "Rest of Northern region", "England",
+  "South Yorkshire", "England", "West Yorkshire", "England",
+  "Rest of Yorks & Humberside", "England", "East Midlands", "England",
+  "East Anglia", "England", "Inner London", "England", "Outer London", "England",
+  "Rest of South East", "England", "South West", "England",
+  "West Midlands (met county)", "England", "Rest of West Midlands", "England",
+  "Greater Manchester", "England", "Merseyside", "England",
+  "Rest of North West", "England", "Wales", "Wales",
+  "Strathclyde", "Scotland", "Rest of Scotland", "Scotland",
+  "Northern Ireland", "Northern Ireland"
+)
+# Check every area in the panel is mapped (names must match exactly)
+unmapped <- setdiff(unique(panel$residence), crosswalk$residence)
+if (length(unmapped)) stop("Residence names not in crosswalk: ", paste(unmapped, collapse = "; "))
+
+ox <- readr::read_csv(oxcgrt_file, show_col_types = FALSE) %>%
+  filter(CountryCode == "GBR", !is.na(RegionName)) %>%       # nations only, drop UK total
+  mutate(date = as.Date(as.character(Date), format = "%Y%m%d"),
+         year = as.integer(format(date, "%Y")),
+         quarter = (as.integer(format(date, "%m")) - 1L) %/% 3L + 1L) %>%
+  arrange(RegionName, date) %>%
+  group_by(RegionName) %>%
+  mutate(new_cases = pmax(ConfirmedCases - lag(ConfirmedCases), 0)) %>%  # cumulative -> daily
+  ungroup()
+
+nation_q <- ox %>%
+  group_by(nation = RegionName, year, quarter) %>%
+  summarise(stringency = mean(StringencyIndex_Average, na.rm = TRUE),
+            new_cases = sum(new_cases, na.rm = TRUE), .groups = "drop")
+
+last_q <- nation_q %>% filter(year == 2022, quarter == 4) %>%
+  select(nation, stringency_last = stringency)
+
+# Per-100k scaling uses the panel's population (16-64) summed within each nation
+nation_pop <- panel %>% left_join(crosswalk, by = "residence") %>%
+  group_by(nation, year, quarter) %>%
+  summarise(nation_pop = sum(pop, na.rm = TRUE), .groups = "drop")
+
+covid_panel <- panel %>%
+  select(residence, year, quarter) %>%
+  left_join(crosswalk, by = "residence") %>%
+  left_join(nation_q, by = c("nation", "year", "quarter")) %>%
+  left_join(nation_pop, by = c("nation", "year", "quarter")) %>%
+  left_join(last_q, by = "nation") %>%
+  mutate(
+    covid_stringency = case_when(year < 2020 ~ 0, year > 2022 ~ stringency_last, TRUE ~ stringency),
+    covid_cases_p100k = case_when(year < 2020 | year > 2022 ~ 0,
+                                  TRUE ~ 1e5 * new_cases / nation_pop)
+  ) %>%
+  select(residence, year, quarter, covid_stringency, covid_cases_p100k)
+
+stopifnot(!anyNA(covid_panel$covid_stringency), !anyNA(covid_panel$covid_cases_p100k))
+print(covid_panel %>% filter(residence %in% c("Inner London", "Wales"), year %in% 2020:2021) %>%
+        arrange(residence, year, quarter))
+
+quarterly_iv_covid <- quarterly_iv_panel %>%
+  left_join(covid_panel, by = c("residence", "year", "quarter"))
+post_c <- quarterly_iv_covid %>% filter(time > 2020 + 3 / 4)
+```
+
+## 10. Section A with Covid controls (baseline vs +stringency vs +cases)
+
+```{r covid-section-a}
+fs0 <- feols(d_ratio ~ shift_share + shift_share_lag | residence + period, data = post_c, vcov = ~ residence)
+fs1 <- feols(d_ratio ~ shift_share + shift_share_lag + covid_stringency | residence + period, data = post_c, vcov = ~ residence)
+fs2 <- feols(d_ratio ~ shift_share + shift_share_lag + covid_cases_p100k | residence + period, data = post_c, vcov = ~ residence)
+etable(fs0, fs1, fs2, headers = c("Baseline", "+ Stringency", "+ Cases p100k"))
+
+wp <- post_c %>% filter(is.finite(mean_log_hourpay), is.finite(d_ratio),
+                        is.finite(shift_share), is.finite(shift_share_lag))
+iv0 <- feols(mean_log_hourpay ~ shift_share_lag | residence + period | d_ratio ~ shift_share, data = wp, vcov = ~ residence)
+iv1 <- feols(mean_log_hourpay ~ shift_share_lag + covid_stringency | residence + period | d_ratio ~ shift_share, data = wp, vcov = ~ residence)
+iv2 <- feols(mean_log_hourpay ~ shift_share_lag + covid_cases_p100k | residence + period | d_ratio ~ shift_share, data = wp, vcov = ~ residence)
+etable(iv0, iv1, iv2, headers = c("Baseline", "+ Stringency", "+ Cases p100k"))
+```
+
+Note: Section A already starts in 2021Q1, so 2020 is excluded by construction.
+
+## 11. Section B with Covid controls, and dropping 2020 (professor's suggestion)
+
+```{r covid-section-b}
+ib <- quarterly_iv_covid %>%
+  filter(year >= 2017) %>%
+  mutate(post2021 = as.integer(year >= 2021),
+         d_ratio_post = d_ratio * post2021,
+         shift_share_post = shift_share * post2021) %>%
+  filter(is.finite(mean_log_hourpay), is.finite(d_ratio), is.finite(d_ratio_post),
+         is.finite(shift_share), is.finite(shift_share_post), is.finite(shift_share_lag))
+
+run_b <- function(data, controls) {
+  f <- as.formula(paste("mean_log_hourpay ~ shift_share_lag", controls,
+                        "| residence + period | d_ratio + d_ratio_post ~ shift_share + shift_share_post"))
+  m <- feols(f, data = data, vcov = ~ residence)
+  b <- coef(m); V <- vcov(m)
+  n1 <- "fit_d_ratio"; n2 <- "fit_d_ratio_post"
+  post <- unname(b[n1] + b[n2])
+  se <- sqrt(V[n1, n1] + V[n2, n2] + 2 * V[n1, n2])
+  data.frame(pre = unname(b[n1]), diff = unname(b[n2]), post = post, post_se = se,
+             post_p = 2 * pt(-abs(post / se), df = n_distinct(data$residence) - 1), n = nobs(m))
+}
+
+res <- bind_rows(
+  cbind(spec = "Baseline (incl. 2020)",            run_b(ib, "")),
+  cbind(spec = "+ Stringency (incl. 2020)",        run_b(ib, "+ covid_stringency")),
+  cbind(spec = "+ Cases p100k (incl. 2020)",       run_b(ib, "+ covid_cases_p100k")),
+  cbind(spec = "Baseline, drop 2020",              run_b(filter(ib, year != 2020), "")),
+  cbind(spec = "+ Stringency, drop 2020",          run_b(filter(ib, year != 2020), "+ covid_stringency")),
+  cbind(spec = "+ Cases p100k, drop 2020",         run_b(filter(ib, year != 2020), "+ covid_cases_p100k"))
+)
+print(res, digits = 3)
+readr::write_csv(res, file.path(output_dir, "covid_robustness_sectionB.csv"))
+```
