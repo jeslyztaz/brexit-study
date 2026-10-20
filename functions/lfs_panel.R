@@ -659,6 +659,10 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
     !is.na(iw) & iw > 0
   log_hourpay <- rep(NA_real_, length(hourpay))
   log_hourpay[pay %in% TRUE] <- log(hourpay[pay %in% TRUE])
+  uk_born_pay <- pay & df$birth3 == "UK"
+  foreign_born_pay <- pay & df$birth3 != "UK"
+  eu_born_pay <- pay & df$birth3 == "EU"
+  non_eu_born_pay <- pay & df$birth3 == "non-EU"
 
   eth_detail <- if (identical(eth_origin, "ETHUKEUL")) {
     share_columns(col(df, "ETHNICITY"), w, c(
@@ -696,6 +700,18 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
       mean_hourpay = wmean(hourpay, iw, among = pay),
       median_hourpay = wmedian(hourpay, iw, among = pay),
       mean_log_hourpay = wmean(log_hourpay, iw, among = pay),
+      mean_hourpay_uk_born = wmean(hourpay, iw, among = uk_born_pay),
+      median_hourpay_uk_born = wmedian(hourpay, iw, among = uk_born_pay),
+      mean_log_hourpay_uk_born = wmean(log_hourpay, iw, among = uk_born_pay),
+      mean_hourpay_foreign_born = wmean(hourpay, iw, among = foreign_born_pay),
+      median_hourpay_foreign_born = wmedian(hourpay, iw, among = foreign_born_pay),
+      mean_log_hourpay_foreign_born = wmean(log_hourpay, iw, among = foreign_born_pay),
+      mean_hourpay_eu_born = wmean(hourpay, iw, among = eu_born_pay),
+      median_hourpay_eu_born = wmedian(hourpay, iw, among = eu_born_pay),
+      mean_log_hourpay_eu_born = wmean(log_hourpay, iw, among = eu_born_pay),
+      mean_hourpay_non_eu_born = wmean(hourpay, iw, among = non_eu_born_pay),
+      median_hourpay_non_eu_born = wmedian(hourpay, iw, among = non_eu_born_pay),
+      mean_log_hourpay_non_eu_born = wmean(log_hourpay, iw, among = non_eu_born_pay),
       n_pay = as.integer(sum(pay %in% TRUE)),
       pop_pay = sum(iw[pay %in% TRUE]),
       mean_hrrate = wmean(hrrate, iw, among = rate),

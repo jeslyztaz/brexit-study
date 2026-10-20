@@ -17,12 +17,12 @@ renv/staging/
 # Raw and processed LFS data
 # ========================================
 data/quarterly_lfs_raw/*
+data/others_raw/*
+data/processed/*
 
-data/aps2019_shrunk_decoded.csv
-data/aps2021_shrunk_decoded.csv
-data/lfs_apr18jun19_shrunk_decoded.csv
-data/lfs_jul19sep20_shrunk_decoded.csv
-data/lfs_oct20dec21_shrunk_decoded.csv
+!data/others_raw/census2011.xls
+!data/processed/census2011.csv
+!data/processed/residence_quarter_panel.csv
 
 
 # Keep README files inside data folders
