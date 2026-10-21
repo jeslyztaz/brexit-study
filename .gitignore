@@ -46,3 +46,4 @@ data/quarterly_lfs_raw/*
 # AI Agent local settings
 # ========================================
 AGENTS.md
+reference_papers/*
