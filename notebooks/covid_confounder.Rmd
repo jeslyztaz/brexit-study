@@ -137,7 +137,6 @@ print(bind_rows(base20_B, base20_B2), digits = 3)
 ```
 
 ## 4. Covid control: ONS Covid deaths (regional) x year dummies, 17 areas
-##   the age-standardised mortality rate (ASMR), meaning Covid deaths per 100,000 people adjusted for age, for 2020, 2021, or both.
 
 ```{r ons-data}
 ons <- readr::read_csv(ons_file, show_col_types = FALSE)
