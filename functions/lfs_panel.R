@@ -933,6 +933,18 @@ aggregate_residence_quarter <- function(lfs, info) {
   bind_rows(rows)
 }
 
+add_covid_info <- function(panel) {
+  covid <- readr::read_csv("data/processed/ons_covid_by_area_20.csv", show_col_types = FALSE) %>%
+    select(-covid_asmr_2020_2021) %>%
+    rename(`2020` = covid_asmr_2020, `2021` = covid_asmr_2021) %>%
+    pivot_longer(`2020`:`2021`, names_to = "year", values_to = "covid_asmr") %>%
+    mutate(year = as.integer(year))
+  panel_final <- panel %>%
+    left_join(covid, by = c("residence", "year")) %>%
+    mutate(covid_asmr = replace_na(covid_asmr, 0))
+  return(panel_final)
+}
+
 build_residence_quarter_panel <- function(root, from_year = NULL) {
   files <- list_lfs_quarter_files(root, from_year = from_year)
   panels <- vector("list", nrow(files))
@@ -949,5 +961,5 @@ build_residence_quarter_panel <- function(root, from_year = NULL) {
     lfs <- add_derived(lfs, file)
     panels[[i]] <- aggregate_residence_quarter(lfs, info)
   }
-  bind_rows(panels) %>% arrange(year, quarter, residence_code)
+  bind_rows(panels) %>% arrange(year, quarter, residence_code) %>% add_covid_info()
 }
