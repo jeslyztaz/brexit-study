@@ -1,0 +1,206 @@
+---
+title: "EC4362 - Covid confounder for the shift-share IV"
+subtitle: "Regional Covid deaths (ONS) as the Covid control"
+output: html_document
+---
+
+## Purpose
+
+The end of the Brexit transition period (31 Dec 2020) coincides with Covid, so Covid conditions may confound
+the link between immigration and wages. Following the professor's advice we (i) acknowledge this up front,
+(ii) add Covid controls, and (iii) drop 2020, the year Covid hit hardest, and check whether the baseline result holds.
+
+**Covid control: ONS Covid-19 deaths by area (regional).** One number per area (age-standardised deaths per 100,000
+in 2020, 2021, or both) is a *snapshot*. On its own it is absorbed by the area fixed effects, so we interact it
+with **year dummies**: areas hit harder by Covid are allowed to follow different paths over time.
+We use 2020 deaths as the main version (measured before the end of the transition period, so post-Brexit migration
+cannot affect it). 2021 and 2020+2021 are robustness checks. ONS covers England and Wales only, so these
+regressions use **17 of the 20 areas** (no Strathclyde, Rest of Scotland, Northern Ireland).
+Quarter-by-quarter interactions are too many parameters for 17 areas, so we use year dummies.
+
+Reading the output: the question is whether the first stage stays strong and whether the wage estimates change materially.
+
+## 0. Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+needed <- c("dplyr", "readr", "fixest")
+missing_packages <- setdiff(needed, rownames(installed.packages()))
+if (length(missing_packages)) stop("Install these packages first: ", paste(missing_packages, collapse = ", "))
+invisible(lapply(needed, library, character.only = TRUE))
+
+project_dir <- dirname(getwd())     # repo root, since this notebook sits in notebooks/
+panel_file  <- file.path(project_dir, "data/processed/residence_quarter_panel.csv")
+ons_file    <- file.path(project_dir, "data/processed/ons_covid_by_area.csv")
+output_dir  <- file.path(project_dir, "outputs")
+for (f in c(panel_file, ons_file)) if (!file.exists(f)) stop("Cannot find: ", f)
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+
+panel <- readr::read_csv(panel_file, show_col_types = FALSE)
+required <- c("residence", "year", "quarter", "pop", "share_birth_uk",
+              "share_birth_other_europe", "share_birth_asia", "share_birth_rest",
+              "mean_log_hourpay")
+missing_cols <- setdiff(required, names(panel))
+if (length(missing_cols)) stop("Missing columns: ", paste(missing_cols, collapse = ", "))
+if (anyDuplicated(panel[c("residence", "year", "quarter")])) stop("Duplicate region-quarter rows")
+
+panel <- panel %>%
+  mutate(year = as.integer(year), quarter = as.integer(quarter),
+         time = year + (quarter - 1) / 4,
+         period = paste0(year, "Q", quarter))      # one label per calendar quarter = quarter fixed effects
+```
+
+## 1. Shift-share variables (same construction as the IV notebook)
+
+```{r iv-variables}
+local_ratio <- panel %>%
+  transmute(residence, year, quarter, time, period, mean_log_hourpay,
+            ratio = 100 * (share_birth_other_europe + share_birth_asia + share_birth_rest) /
+                    (100 * share_birth_uk)) %>%
+  arrange(residence, year, quarter) %>%
+  group_by(residence) %>%
+  mutate(d_ratio = ratio - lag(ratio)) %>%      # change from the previous quarter
+  ungroup()
+
+national <- panel %>%
+  group_by(year, quarter) %>%
+  summarise(national_ratio = sum(pop * (share_birth_other_europe + share_birth_asia + share_birth_rest), na.rm = TRUE) /
+                             sum(pop * share_birth_uk, na.rm = TRUE), .groups = "drop") %>%
+  arrange(year, quarter) %>%
+  mutate(g = national_ratio - lag(national_ratio), g_lag = lag(g))
+
+baseline <- local_ratio %>%
+  filter(year >= 2017, year <= 2019) %>%
+  group_by(residence) %>%
+  summarise(baseline = mean(ratio, na.rm = TRUE), .groups = "drop")
+
+quarterly_iv_panel <- local_ratio %>%
+  inner_join(baseline, by = "residence") %>%
+  inner_join(select(national, year, quarter, g, g_lag), by = c("year", "quarter")) %>%
+  mutate(shift_share = baseline * g, shift_share_lag = baseline * g_lag)
+stopifnot(n_distinct(quarterly_iv_panel$residence) == 20)
+```
+
+## 2. Helper functions
+
+```{r helpers}
+# pick the coefficient whose name ends in d_ratio (fixest names the instrumented variable fit_d_ratio)
+pick <- function(x) unname(x[grep("d_ratio$", names(x))][1])
+
+# Section A: first stage and wage IV on the post-2020 sample (2021Q1 onward)
+run_A <- function(label, data, ctl = "") {
+  d <- data %>% filter(time > 2020 + 3 / 4, is.finite(mean_log_hourpay), is.finite(d_ratio),
+                       is.finite(shift_share), is.finite(shift_share_lag))
+  fs <- feols(as.formula(paste("d_ratio ~ shift_share + shift_share_lag", ctl, "| residence + period")),
+              data = d, vcov = ~ residence)
+  iv <- feols(as.formula(paste("mean_log_hourpay ~ shift_share_lag", ctl,
+                               "| residence + period | d_ratio ~ shift_share")), data = d, vcov = ~ residence)
+  list(row = data.frame(spec = label, areas = n_distinct(d$residence), n = nobs(fs),
+                        fs_coef = unname(coef(fs)["shift_share"]),
+                        fs_F = unname(coeftable(fs)["shift_share", "t value"]^2),
+                        iv_coef = pick(coef(iv)), iv_se = pick(se(iv)), iv_p = pick(pvalue(iv))),
+       fs = fs, iv = iv)
+}
+
+# Section B: pre/post-2021 interaction IV (two endogenous variables, two instruments), 2017 onward
+make_B <- function(data) {
+  data %>% filter(year >= 2017) %>%
+    mutate(post2021 = as.integer(year >= 2021),
+           d_ratio_post = d_ratio * post2021,
+           shift_share_post = shift_share * post2021) %>%
+    filter(is.finite(mean_log_hourpay), is.finite(d_ratio), is.finite(d_ratio_post),
+           is.finite(shift_share), is.finite(shift_share_post), is.finite(shift_share_lag))
+}
+run_B <- function(label, data, ctl = "") {
+  d <- make_B(data)
+  m <- feols(as.formula(paste("mean_log_hourpay ~ shift_share_lag", ctl,
+                              "| residence + period | d_ratio + d_ratio_post ~ shift_share + shift_share_post")),
+             data = d, vcov = ~ residence)
+  b <- coef(m); V <- vcov(m)
+  n1 <- "fit_d_ratio"; n2 <- "fit_d_ratio_post"
+  if (!all(c(n1, n2) %in% names(b))) stop("Unexpected coefficient names: ", paste(names(b), collapse = ", "))
+  post <- unname(b[n1] + b[n2])
+  post_se <- sqrt(V[n1, n1] + V[n2, n2] + 2 * V[n1, n2])      # includes the covariance
+  data.frame(spec = label, areas = n_distinct(d$residence), n = nobs(m),
+             pre = unname(b[n1]), diff = unname(b[n2]), post = post, post_se = post_se,
+             post_p = 2 * pt(-abs(post / post_se), df = n_distinct(d$residence) - 1))
+}
+
+# Snapshot x year dummies. Returns the data with new columns and the formula terms.
+#   from_year = first year that gets its own dummy; earlier years are the reference.
+add_year_ints <- function(data, v, from_year) {
+  yrs <- sort(unique(data$year)); yrs <- yrs[yrs >= from_year]
+  for (y in yrs) data[[paste0(v, "_y", y)]] <- data[[v]] * (data$year == y)
+  list(data = data, terms = paste0("+ ", paste0(v, "_y", yrs, collapse = " + ")))
+}
+```
+
+## 3. Reference: baseline results, all 20 areas, no Covid control
+
+```{r baseline-20}
+base20_A <- run_A("Baseline, 20 areas", quarterly_iv_panel)
+base20_B <- run_B("Baseline, 20 areas (incl. 2020)", quarterly_iv_panel)
+base20_B2 <- run_B("Baseline, 20 areas (drop 2020)", filter(quarterly_iv_panel, year != 2020))
+print(base20_A$row, digits = 3)
+print(bind_rows(base20_B, base20_B2), digits = 3)
+```
+
+## 4. Covid control: ONS Covid deaths (regional) x year dummies, 17 areas
+
+```{r ons-data}
+ons <- readr::read_csv(ons_file, show_col_types = FALSE)
+stopifnot(all(c("residence", "covid_asmr_2020", "covid_asmr_2021", "covid_asmr_2020_2021") %in% names(ons)))
+ons_panel <- quarterly_iv_panel %>% inner_join(ons, by = "residence")      # drops the 3 Scottish / NI areas
+cat("Areas with ONS data:", n_distinct(ons_panel$residence), "\n")
+print(ons %>% select(residence, covid_asmr_2020, covid_asmr_2021), n = 20)
+```
+
+### 4a. Section A (first stage and wage IV, 2021Q1 onward)
+
+2021 is the reference year in this sample, so the dummies cover 2022 onward.
+
+```{r ons-section-a}
+ons_vars <- c("2020 deaths" = "covid_asmr_2020", "2021 deaths" = "covid_asmr_2021",
+              "2020-21 deaths" = "covid_asmr_2020_2021")
+resA <- list(run_A("17 areas, baseline", ons_panel))
+for (k in names(ons_vars)) {
+  a <- add_year_ints(ons_panel, ons_vars[[k]], from_year = 2022)
+  resA[[length(resA) + 1]] <- run_A(paste0("17 areas, + ", k, " x year"), a$data, a$terms)
+}
+tabA_ons <- bind_rows(lapply(resA, `[[`, "row"))
+print(tabA_ons, digits = 3)
+etable(lapply(resA, `[[`, "fs"), headers = tabA_ons$spec, keep = "^shift_share$")
+etable(lapply(resA, `[[`, "iv"), headers = tabA_ons$spec, keep = "d_ratio")
+```
+
+### 4b. Section B (pre/post-2021 interaction IV), with and without 2020
+
+Here the pre-2020 years are the reference, so the Covid snapshot gets its own dummy for each year from 2020 on.
+
+```{r ons-section-b}
+resB <- list(run_B("17 areas, baseline (incl. 2020)", ons_panel),
+             run_B("17 areas, baseline (drop 2020)", filter(ons_panel, year != 2020)))
+for (k in names(ons_vars)) {
+  a <- add_year_ints(ons_panel, ons_vars[[k]], from_year = 2020)
+  resB[[length(resB) + 1]] <- run_B(paste0("17 areas, + ", k, " x year (incl. 2020)"), a$data, a$terms)
+  a2 <- add_year_ints(filter(ons_panel, year != 2020), ons_vars[[k]], from_year = 2020)
+  resB[[length(resB) + 1]] <- run_B(paste0("17 areas, + ", k, " x year (drop 2020)"), a2$data, a2$terms)
+}
+tabB_ons <- bind_rows(resB)
+print(tabB_ons, digits = 3)
+```
+
+## 5. Save results
+
+```{r export}
+readr::write_csv(bind_rows(base20_A$row, tabA_ons), file.path(output_dir, "covid_sectionA_results.csv"))
+readr::write_csv(bind_rows(base20_B, base20_B2, tabB_ons), file.path(output_dir, "covid_sectionB_results.csv"))
+message("Saved to: ", output_dir)
+```
+
+## Interpretation notes for the write-up
+
+1. If the first stage stays strong and the wage estimates barely move across rows, Covid is not driving the baseline result.
+   Report both the point estimates and the standard errors; "not significant" means the data cannot rule out zero, not that the effect is zero.
+2. The ONS control is regional, but covers 17 areas only, and 2021 deaths are measured after the Brexit shock, so 2020 deaths is the main version.
+3. With 17 to 20 clusters, clustered p-values can be too small; a wild-cluster bootstrap would be more credible if time allows.
+4. Section B includes 2020 in the pre-period; the "drop 2020" rows are the professor's suggested robustness check.
