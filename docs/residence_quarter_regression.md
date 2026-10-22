@@ -76,13 +76,15 @@ The panel's six ethnicity shares are person-weighted among residents with a know
 
 `pop` on the panel is the sum of the person weights of residents aged 16–64, including people whose birthplace is missing. Each birth share is the person-weighted share among residents with a known birthplace and a positive person weight.
 
-`native` = `pop` × `share_birth_uk`. `eu` = `pop` × `share_birth_eu`. `non_eu` = `pop` × `share_birth_non_eu`. `migrant` = `eu` + `non_eu`. An area with `pop` of 0 and a missing share is stored as a count of 0. A positive `pop` with a missing share stays missing. Because `pop` includes missing birthplace and the share does not, the count equals the weighted group total only when birthplace is known for everyone in `pop`.
+`pop_uk_born`, `pop_eu_born`, and `pop_non_eu_born` are the sums of the person weights for residents whose birthplace is UK, EU, and non-EU. Missing birthplace is in none of the three. A group with nobody in it is 0, including an area with `pop` of 0. `pop_birthplace_unknown` is the person-weighted total with missing birthplace. `birthplace_missing_rate` is that total divided by `pop`, and it is missing when `pop` is 0. The three birthplace totals and `pop_birthplace_unknown` add up to `pop`.
+
+`native`, `eu`, and `non_eu` are those three birthplace totals. `migrant` = `eu` + `non_eu`. The regression file keeps `native`, `eu`, `non_eu`, and `migrant`. The `pop_*` totals and `birthplace_missing_rate` stay on the panel.
 
 ## Ratios
 
-`ratio_migrant` = `migrant` / `native`. `ratio_eu` = `eu` / `native`. `ratio_non_eu` = `non_eu` / `native`. The ratio is missing when `native` is missing or not positive. `pop` cancels, so `ratio_migrant` = (`share_birth_eu` + `share_birth_non_eu`) / `share_birth_uk` whenever `pop` is positive.
+`ratio_migrant` = `migrant` / `native`. `ratio_eu` = `eu` / `native`. `ratio_non_eu` = `non_eu` / `native`. The ratio is missing when `native` is missing or not positive. Where `share_birth_uk` is positive, `ratio_migrant` = (`share_birth_eu` + `share_birth_non_eu`) / `share_birth_uk`. The EU and non-EU ratios match their shares in the same way. The known-birthplace total sits in every share, so it cancels.
 
-`national_ratio_migrant`, `national_ratio_eu`, and `national_ratio_non_eu` use the same formulas on the sums of the area counts in that quarter. They are not the average of the area ratios.
+`national_ratio_migrant`, `national_ratio_eu`, and `national_ratio_non_eu` use the same formulas on the sums of the area counts in that quarter. They are not the average of the area ratios. Missing birthplace is not in those counts, so an area with more missing birthplace does not receive a larger weight in the national total.
 
 ## Changes
 
@@ -105,9 +107,11 @@ Area columns are matched within `residence`. National columns are matched on the
 
 The baseline window is 2010 Q1 through 2015 Q4 inclusive. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite.
 
-`baseline_ratio_migrant` = sum of `migrant` / sum of `native` over that window, inside the residence. `baseline_ratio_eu` and `baseline_ratio_non_eu` use `eu` and `non_eu` as the numerator. This is the pooled stock, not the average of the quarterly ratios. The same value is written on every quarter for that residence, including quarters outside 2010–2015.
+`baseline_ratio_migrant` = sum of `migrant` / sum of `native` over that window, inside the residence. `baseline_ratio_eu` and `baseline_ratio_non_eu` use `eu` and `non_eu` as the numerator. This is the pooled stock, not the average of the quarterly ratios. The sums use the birthplace totals, so a quarter with more missing birthplace is not scaled up. The same value is written on every quarter for that residence, including quarters outside 2010–2015.
 
 `baseline_national_ratio_migrant`, `baseline_national_ratio_eu`, and `baseline_national_ratio_non_eu` are the same pooled ratios with the sums taken over all twenty areas. Each one is a single number, repeated on every row.
+
+The same construction is also stored for 2017 Q1 through 2019 Q4. Those columns end in `_2017_2019`: `baseline_ratio_migrant_2017_2019`, `baseline_ratio_eu_2017_2019`, `baseline_ratio_non_eu_2017_2019`, and the three `baseline_national_ratio_*_2017_2019` columns. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite. The 2010–2015 columns are unchanged. This window includes 2017 Q1–Q2, when birthplace is `CRYOX7`, and 2017 Q3 through 2019 Q4, when it is `CRYOX7_EUL_Main`.
 
 ## Wages
 
@@ -124,6 +128,8 @@ For each area and quarter, the leave-one-out national ratio keeps every area exc
 `shift_share_qoq_eu`, `shift_share_qoq_non_eu`, `shift_share_yoy_eu`, `shift_share_yoy_non_eu`
 
 `shift_share_yoy_migrant_l4`, `shift_share_yoy_eu_l4`, and `shift_share_yoy_non_eu_l4` are those year-on-year shift-shares dated four quarters earlier. The leave-one-out ratios themselves are not in the file.
+
+`shift_share_qoq_migrant_2017_2019` = `baseline_ratio_migrant_2017_2019` × the same quarter-to-quarter leave-one-out change. The EU, non-EU, and year-on-year columns follow the same pattern: `shift_share_qoq_eu_2017_2019`, `shift_share_qoq_non_eu_2017_2019`, `shift_share_yoy_migrant_2017_2019`, `shift_share_yoy_eu_2017_2019`, and `shift_share_yoy_non_eu_2017_2019`. `shift_share_yoy_migrant_2017_2019_l4`, `shift_share_yoy_eu_2017_2019_l4`, and `shift_share_yoy_non_eu_2017_2019_l4` are those year-on-year shift-shares dated four quarters earlier.
 
 ## UK-born controls
 

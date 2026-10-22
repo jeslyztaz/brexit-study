@@ -1,24 +1,33 @@
 # Migration ratios for the shift-share regression.
 #
 # Input is the residence-quarter panel from build_residence_quarter_panel(),
-# which must cover 2010 Q1 through 2015 Q4. Natives are UK-born. Migrants
-# are EU-born plus non-EU-born. Regions are the URESMC residence areas.
+# which must cover 2010 Q1 through 2015 Q4 and 2017 Q1 through 2019 Q4.
+# Natives are UK-born. Migrants are EU-born plus non-EU-born. Regions are
+# the URESMC residence areas.
 #
-# Counts are person-weighted: pop times the birth share. pop includes people
-# with missing birthplace, while the shares do not, so the count matches the
-# weighted group total only when birthplace is known for everyone in pop.
-# The regional ratio does not depend on pop, because pop cancels.
+# native, eu, and non_eu are the person-weighted totals pop_uk_born,
+# pop_eu_born, and pop_non_eu_born. Those totals leave out missing
+# birthplace. pop still includes it, and the birth shares are among people
+# with a known birthplace, so pop times a share is larger than the group
+# total when any birthplace is missing. That scale cancels in a regional
+# ratio. It does not cancel in a sum across areas or across quarters, so
+# national ratios, leave-one-out ratios, baselines, and the shift-share
+# use the totals directly.
 #
 # The lagged year-on-year change, d_yoy_ratio_*_l4, is the migration term
 # Jaeger, Ruist and Stuhler put on the right-hand side. In quarter t it is
 # the ratio four quarters earlier minus the ratio eight quarters earlier.
 #
-# The shift-share is that area's 2010-2015 baseline ratio times the
-# leave-one-out change in the national ratio. Leaving the area out matters
-# because these residence areas, especially London, are large shares of the
-# national total. The inclusive national change would partly be the area's
-# own migration. qoq and yoy instruments are both stored. The regression
+# The shift-share is that area's baseline ratio times the leave-one-out
+# change in the national ratio. Leaving the area out matters because these
+# residence areas, especially London, are large shares of the national
+# total. The inclusive national change would partly be the area's own
+# migration. qoq and yoy instruments are both stored. The regression
 # chooses which one to use. Rows are not restricted to a sample.
+#
+# baseline_ratio_* and shift_share_* use the 2010-2015 pooled stock. The
+# same construction for 2017-2019 is stored on the columns that end in
+# _2017_2019. The leave-one-out change is the same in both.
 #
 # UK-born age, qualification, and ethnicity controls are read from the
 # panel columns that end in _uk_born. Chinese is its own share. White is
@@ -31,11 +40,13 @@
 # levels specification. White is omitted, so it has no change column.
 
 construct_variables <- function(panel) {
-  required <- c(
-    "residence", "year", "quarter", "pop",
+  numeric_cols <- c(
+    "pop",
+    "pop_uk_born", "pop_eu_born", "pop_non_eu_born", "pop_birthplace_unknown",
     "share_birth_uk", "share_birth_eu", "share_birth_non_eu",
     "mean_log_hourpay", "mean_log_hourpay_uk_born"
   )
+  required <- c("residence", "year", "quarter", numeric_cols)
   missing <- setdiff(required, names(panel))
   if (length(missing) > 0L) {
     stop(
@@ -49,7 +60,7 @@ construct_variables <- function(panel) {
       residence = as.character(residence),
       year = as.integer(year),
       quarter = as.integer(quarter),
-      across(all_of(required[4:9]), as.numeric)
+      across(all_of(numeric_cols), as.numeric)
     )
   if (anyNA(panel$year) || anyNA(panel$quarter)) {
     stop("Year and quarter must be non-missing.", call. = FALSE)
@@ -58,15 +69,16 @@ construct_variables <- function(panel) {
     stop("Duplicate residence-year-quarter rows.", call. = FALSE)
   }
 
-  stop_unless_baseline_window(panel)
+  stop_unless_baseline_window(panel, 2010L, 2015L)
+  stop_unless_baseline_window(panel, 2017L, 2019L)
 
-  # An empty sample has pop 0 and missing shares. That is a zero count,
-  # not a missing area. A positive pop with a missing share stays missing.
+  # An empty group is already 0 on the panel. Missing birthplace is not
+  # inside these totals, so it is not allocated across the three groups.
   local <- panel %>%
     mutate(
-      native = group_count(pop, share_birth_uk),
-      eu = group_count(pop, share_birth_eu),
-      non_eu = group_count(pop, share_birth_non_eu),
+      native = pop_uk_born,
+      eu = pop_eu_born,
+      non_eu = pop_non_eu_born,
       migrant = eu + non_eu,
       ratio_migrant = ratio_or_na(migrant, native),
       ratio_eu = ratio_or_na(eu, native),
@@ -77,6 +89,7 @@ construct_variables <- function(panel) {
       native, eu, non_eu, migrant,
       ratio_migrant, ratio_eu, ratio_non_eu
     )
+  check_group_counts(panel, local)
 
   national <- local %>%
     group_by(year, quarter) %>%
@@ -112,6 +125,7 @@ construct_variables <- function(panel) {
         national_non_eu - non_eu, national_native - native
       )
     )
+  check_aggregated_counts(local, out)
 
   ratio_cols <- c("ratio_migrant", "ratio_eu", "ratio_non_eu")
   national_cols <- c(
@@ -151,16 +165,36 @@ construct_variables <- function(panel) {
     )
   }
 
-  national_native <- sum(baseline_rows$native)
+  # Outside mutate. out still has the quarterly national_native column,
+  # and mutate() would use that column as the denominator.
+  baseline_native_total <- sum(baseline_rows$native)
+  out <- out %>% left_join(baseline, by = "residence")
+  out$baseline_national_ratio_migrant <- ratio_or_na(
+    sum(baseline_rows$migrant), baseline_native_total
+  )
+  out$baseline_national_ratio_eu <- ratio_or_na(
+    sum(baseline_rows$eu), baseline_native_total
+  )
+  out$baseline_national_ratio_non_eu <- ratio_or_na(
+    sum(baseline_rows$non_eu), baseline_native_total
+  )
+  values_agree(
+    out$baseline_national_ratio_migrant,
+    rep(ratio_or_na(sum(baseline_rows$migrant), baseline_native_total), nrow(out)),
+    "2010-2015 national migrant baseline"
+  )
+  values_agree(
+    out$baseline_national_ratio_eu,
+    rep(ratio_or_na(sum(baseline_rows$eu), baseline_native_total), nrow(out)),
+    "2010-2015 national EU baseline"
+  )
+  values_agree(
+    out$baseline_national_ratio_non_eu,
+    rep(ratio_or_na(sum(baseline_rows$non_eu), baseline_native_total), nrow(out)),
+    "2010-2015 national non-EU baseline"
+  )
   out <- out %>%
-    left_join(baseline, by = "residence") %>%
     mutate(
-      baseline_national_ratio_migrant =
-        ratio_or_na(sum(baseline_rows$migrant), national_native),
-      baseline_national_ratio_eu =
-        ratio_or_na(sum(baseline_rows$eu), national_native),
-      baseline_national_ratio_non_eu =
-        ratio_or_na(sum(baseline_rows$non_eu), national_native),
       shift_share_qoq_migrant =
         baseline_ratio_migrant * d_qoq_loo_ratio_migrant,
       shift_share_qoq_eu = baseline_ratio_eu * d_qoq_loo_ratio_eu,
@@ -176,6 +210,19 @@ construct_variables <- function(panel) {
   out <- copy_from(
     out,
     c("shift_share_yoy_migrant", "shift_share_yoy_eu", "shift_share_yoy_non_eu"),
+    4L,
+    "_l4"
+  )
+  # Same pooled stock and shift-share, with the 2017-2019 baseline ratio.
+  # The leave-one-out changes above are not rebuilt.
+  out <- attach_baseline_shift_share(out, 2017L, 2019L, "_2017_2019")
+  out <- copy_from(
+    out,
+    c(
+      "shift_share_yoy_migrant_2017_2019",
+      "shift_share_yoy_eu_2017_2019",
+      "shift_share_yoy_non_eu_2017_2019"
+    ),
     4L,
     "_l4"
   )
@@ -208,13 +255,6 @@ construct_variables <- function(panel) {
   out %>% arrange(residence, year, quarter)
 }
 
-group_count <- function(pop, share) {
-  out <- pop * share
-  empty <- is.finite(pop) & pop == 0 & !is.finite(share)
-  out[empty] <- 0
-  out
-}
-
 # A non-positive or missing denominator is a missing ratio, not infinity.
 ratio_or_na <- function(numerator, denominator) {
   out <- numerator / denominator
@@ -222,9 +262,161 @@ ratio_or_na <- function(numerator, denominator) {
   out
 }
 
-stop_unless_baseline_window <- function(panel) {
+# Finite values agree. A row that is finite on only one side disagrees.
+values_agree <- function(actual, expected, label) {
+  if (length(actual) != length(expected)) {
+    stop(label, " has a different number of rows.", call. = FALSE)
+  }
+  actual_ok <- is.finite(actual)
+  expected_ok <- is.finite(expected)
+  if (any(actual_ok != expected_ok)) {
+    stop(label, " is not finite on the same rows.", call. = FALSE)
+  }
+  if (!any(actual_ok)) return(invisible(NULL))
+  scale <- pmax(1, abs(actual[actual_ok]), abs(expected[expected_ok]))
+  if (any(abs(actual[actual_ok] - expected[expected_ok]) > 1e-8 * scale)) {
+    stop(label, " is outside tolerance.", call. = FALSE)
+  }
+  invisible(NULL)
+}
+
+stop_if_invalid_counts <- function(x, label) {
+  if (any(!is.finite(x) | x < 0)) {
+    stop(label, " must be finite and non-negative.", call. = FALSE)
+  }
+  invisible(NULL)
+}
+
+# Direct counts, the birthplace partition of pop, and the regional ratios.
+# The share ratio is defined on the same rows because the known-birthplace
+# total cancels.
+check_group_counts <- function(panel, local) {
+  if (!identical(local$residence, panel$residence) ||
+      !identical(local$year, panel$year) ||
+      !identical(local$quarter, panel$quarter)) {
+    stop("Birthplace counts are not on the same rows as the panel.", call. = FALSE)
+  }
+  stop_if_invalid_counts(
+    c(
+      panel$pop, panel$pop_uk_born, panel$pop_eu_born, panel$pop_non_eu_born,
+      panel$pop_birthplace_unknown, local$native, local$eu, local$non_eu,
+      local$migrant
+    ),
+    "Population counts"
+  )
+  known <- panel$pop_uk_born + panel$pop_eu_born + panel$pop_non_eu_born
+  tol <- 1e-8 * pmax(1, abs(panel$pop))
+  if (any(known - panel$pop > tol)) {
+    stop("Birthplace group counts exceed pop.", call. = FALSE)
+  }
+  values_agree(
+    known + panel$pop_birthplace_unknown, panel$pop,
+    "Sum of birthplace counts"
+  )
+  values_agree(local$native, panel$pop_uk_born, "Native count")
+  values_agree(local$eu, panel$pop_eu_born, "EU count")
+  values_agree(local$non_eu, panel$pop_non_eu_born, "Non-EU count")
+  values_agree(local$migrant, local$eu + local$non_eu, "Migrant count")
+  values_agree(
+    local$ratio_migrant,
+    ratio_or_na(
+      panel$share_birth_eu + panel$share_birth_non_eu, panel$share_birth_uk
+    ),
+    "Regional migrant ratio"
+  )
+  values_agree(
+    local$ratio_eu,
+    ratio_or_na(panel$share_birth_eu, panel$share_birth_uk),
+    "Regional EU ratio"
+  )
+  values_agree(
+    local$ratio_non_eu,
+    ratio_or_na(panel$share_birth_non_eu, panel$share_birth_uk),
+    "Regional non-EU ratio"
+  )
+  invisible(NULL)
+}
+
+# National and leave-one-out ratios from the sums of the area counts.
+check_aggregated_counts <- function(local, joined) {
+  counts <- c("native", "eu", "non_eu", "migrant")
+  national_counts <- c(
+    "national_native", "national_eu", "national_non_eu", "national_migrant"
+  )
+  stop_if_invalid_counts(
+    c(as.matrix(local[counts]), as.matrix(joined[national_counts])),
+    "Aggregated population counts"
+  )
+  key <- paste(local$year, local$quarter)
+  totals <- rowsum(as.matrix(local[counts]), key)
+  joined_key <- paste(joined$year, joined$quarter)
+  values_agree(
+    joined$national_native, totals[joined_key, "native"],
+    "National native count"
+  )
+  values_agree(
+    joined$national_eu, totals[joined_key, "eu"],
+    "National EU count"
+  )
+  values_agree(
+    joined$national_non_eu, totals[joined_key, "non_eu"],
+    "National non-EU count"
+  )
+  values_agree(
+    joined$national_migrant, totals[joined_key, "migrant"],
+    "National migrant count"
+  )
+  values_agree(
+    joined$national_migrant,
+    joined$national_eu + joined$national_non_eu,
+    "National migrant total"
+  )
+  values_agree(
+    joined$national_ratio_migrant,
+    ratio_or_na(joined$national_migrant, joined$national_native),
+    "National migrant ratio"
+  )
+  values_agree(
+    joined$national_ratio_eu,
+    ratio_or_na(joined$national_eu, joined$national_native),
+    "National EU ratio"
+  )
+  values_agree(
+    joined$national_ratio_non_eu,
+    ratio_or_na(joined$national_non_eu, joined$national_native),
+    "National non-EU ratio"
+  )
+  values_agree(
+    joined$loo_ratio_migrant,
+    ratio_or_na(
+      joined$national_migrant - joined$migrant,
+      joined$national_native - joined$native
+    ),
+    "Leave-one-out migrant ratio"
+  )
+  values_agree(
+    joined$loo_ratio_eu,
+    ratio_or_na(
+      joined$national_eu - joined$eu,
+      joined$national_native - joined$native
+    ),
+    "Leave-one-out EU ratio"
+  )
+  values_agree(
+    joined$loo_ratio_non_eu,
+    ratio_or_na(
+      joined$national_non_eu - joined$non_eu,
+      joined$national_native - joined$native
+    ),
+    "Leave-one-out non-EU ratio"
+  )
+  invisible(NULL)
+}
+
+stop_unless_baseline_window <- function(panel, year_min, year_max) {
+  label <- paste0(year_min, "-", year_max)
   window <- expand.grid(
-    year = 2010:2015,
+    year = seq.int(year_min, year_max),
     quarter = 1:4,
     stringsAsFactors = FALSE
   )
@@ -234,9 +426,9 @@ stop_unless_baseline_window <- function(panel) {
   missing_periods <- anti_join(window, have, by = c("year", "quarter"))
   if (nrow(missing_periods) > 0L) {
     stop(
-      "Panel does not cover the 2010-2015 baseline. Missing years: ",
+      "Panel does not cover the ", label, " baseline. Missing years: ",
       paste(sort(unique(missing_periods$year)), collapse = ", "),
-      ". Rebuild the panel from 2010.",
+      ". Rebuild the panel so it includes ", label, ".",
       call. = FALSE
     )
   }
@@ -244,14 +436,14 @@ stop_unless_baseline_window <- function(panel) {
   areas <- sort(unique(panel$residence))
   grid <- merge(data.frame(residence = areas, stringsAsFactors = FALSE), window)
   have_rows <- panel %>%
-    filter(year >= 2010L, year <= 2015L) %>%
+    filter(year >= year_min, year <= year_max) %>%
     distinct(residence, year, quarter)
   missing_rows <- anti_join(
     grid, have_rows, by = c("residence", "year", "quarter")
   )
   if (nrow(missing_rows) > 0L) {
     stop(
-      "2010-2015 is missing ", nrow(missing_rows),
+      label, " is missing ", nrow(missing_rows),
       " residence-quarters, including ",
       paste(
         apply(
@@ -265,6 +457,64 @@ stop_unless_baseline_window <- function(panel) {
     )
   }
   invisible(NULL)
+}
+
+# Pooled baseline ratios and the shift-shares that multiply them by the
+# leave-one-out changes already on data. suffix is appended to the
+# 2010-2015 column names. A quarter counts only when native, eu, and
+# non_eu are all finite.
+attach_baseline_shift_share <- function(data, year_min, year_max, suffix) {
+  label <- paste0(year_min, "-", year_max)
+  baseline_rows <- data %>%
+    filter(year >= year_min, year <= year_max) %>%
+    filter(is.finite(native), is.finite(eu), is.finite(non_eu))
+  baseline <- baseline_rows %>%
+    group_by(residence) %>%
+    summarise(
+      baseline_ratio_migrant = ratio_or_na(sum(migrant), sum(native)),
+      baseline_ratio_eu = ratio_or_na(sum(eu), sum(native)),
+      baseline_ratio_non_eu = ratio_or_na(sum(non_eu), sum(native)),
+      .groups = "drop"
+    )
+  if (any(!is.finite(baseline$baseline_ratio_migrant))) {
+    bad <- baseline$residence[!is.finite(baseline$baseline_ratio_migrant)]
+    stop(
+      "No usable ", label, " native total for: ",
+      paste(bad, collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  ratio_cols <- c(
+    "baseline_ratio_migrant", "baseline_ratio_eu", "baseline_ratio_non_eu"
+  )
+  names(baseline)[match(ratio_cols, names(baseline))] <- paste0(ratio_cols, suffix)
+
+  national_native <- sum(baseline_rows$native)
+  n_before <- nrow(data)
+  data <- data %>% left_join(baseline, by = "residence")
+  if (nrow(data) != n_before) {
+    stop("Baseline join changed the row count.", call. = FALSE)
+  }
+
+  data[[paste0("baseline_national_ratio_migrant", suffix)]] <-
+    ratio_or_na(sum(baseline_rows$migrant), national_native)
+  data[[paste0("baseline_national_ratio_eu", suffix)]] <-
+    ratio_or_na(sum(baseline_rows$eu), national_native)
+  data[[paste0("baseline_national_ratio_non_eu", suffix)]] <-
+    ratio_or_na(sum(baseline_rows$non_eu), national_native)
+  data[[paste0("shift_share_qoq_migrant", suffix)]] <-
+    data[[paste0("baseline_ratio_migrant", suffix)]] * data$d_qoq_loo_ratio_migrant
+  data[[paste0("shift_share_qoq_eu", suffix)]] <-
+    data[[paste0("baseline_ratio_eu", suffix)]] * data$d_qoq_loo_ratio_eu
+  data[[paste0("shift_share_qoq_non_eu", suffix)]] <-
+    data[[paste0("baseline_ratio_non_eu", suffix)]] * data$d_qoq_loo_ratio_non_eu
+  data[[paste0("shift_share_yoy_migrant", suffix)]] <-
+    data[[paste0("baseline_ratio_migrant", suffix)]] * data$d_yoy_loo_ratio_migrant
+  data[[paste0("shift_share_yoy_eu", suffix)]] <-
+    data[[paste0("baseline_ratio_eu", suffix)]] * data$d_yoy_loo_ratio_eu
+  data[[paste0("shift_share_yoy_non_eu", suffix)]] <-
+    data[[paste0("baseline_ratio_non_eu", suffix)]] * data$d_yoy_loo_ratio_non_eu
+  data
 }
 
 # Value in this quarter minus the value k quarters earlier, matched on the

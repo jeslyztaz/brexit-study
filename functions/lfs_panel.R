@@ -136,6 +136,54 @@ wshare <- function(x, w, level, among = TRUE) {
   sum(w[ok] * (x[ok] == level)) / sum(w[ok])
 }
 
+# Sum of positive person weights in one birthplace group. Missing
+# birthplace is left out, so it is not added to non-EU. Nobody in the
+# group is a total of 0, including an empty area.
+wtotal <- function(x, w, level) {
+  ok <- !is.na(w) & w > 0 & !is.na(x) & x == level
+  ok[is.na(ok)] <- FALSE
+  sum(w[ok])
+}
+
+# Positive person weight outside the classified birthplace groups.
+# Missing birthplace is in this total.
+wtotal_outside <- function(x, w, levels) {
+  person <- !is.na(w) & w > 0
+  person[is.na(person)] <- FALSE
+  inside <- person & !is.na(x) & x %in% levels
+  sum(w[person & !inside])
+}
+
+# The three group totals are the weighted population with a classified
+# birthplace, and those totals plus missing birthplace are pop.
+check_residence_birth_counts <- function(x, w, pop, totals, unknown) {
+  levels <- unname(birth_shares)
+  counts <- c(pop, totals, unknown)
+  if (any(!is.finite(counts)) || any(counts < 0)) {
+    stop(
+      "Birthplace population counts must be finite and non-negative.",
+      call. = FALSE
+    )
+  }
+  known <- !is.na(w) & w > 0 & !is.na(x) & x %in% levels
+  known[is.na(known)] <- FALSE
+  known_pop <- sum(w[known])
+  tol <- 1e-8 * max(1, abs(pop))
+  if (abs(sum(totals) - known_pop) > tol) {
+    stop(
+      "Sum of UK, EU, and non-EU counts does not equal the weighted population with known birthplace.",
+      call. = FALSE
+    )
+  }
+  if (sum(totals) - pop > tol) {
+    stop("Birthplace group counts exceed pop.", call. = FALSE)
+  }
+  if (abs(sum(totals) + unknown - pop) > tol) {
+    stop("Birthplace counts do not add up to pop.", call. = FALSE)
+  }
+  invisible(NULL)
+}
+
 # Unlike wshare, a FALSE or missing flag stays in the denominator. Used for
 # arrival lags, where people with no arrival year are part of the population.
 wprop <- function(flag, w) {
@@ -699,6 +747,8 @@ years_since <- function(df, column, w) {
 
 # df is one residence area, already limited to ages 16-64. Zero rows is a
 # real area with nobody in the sample: counts are 0 and rates are missing.
+# Birthplace totals use the same positive person weights as pop. Missing
+# birthplace stays in pop and pop_birthplace_unknown, not in a group.
 residence_stats <- function(df, eth_origin, occ_scheme) {
   w <- col(df, "WEIGHT")
   iw <- col(df, "INCOME_WEIGHT")
@@ -758,10 +808,33 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
     paste0("share_occ_", 1:9)
   )
 
+  birth3 <- df$birth3
+  birth_levels <- unname(birth_shares)
+  pop <- sum(w[person])
+  pop_uk_born <- wtotal(birth3, w, birth_levels[[1L]])
+  pop_eu_born <- wtotal(birth3, w, birth_levels[[2L]])
+  pop_non_eu_born <- wtotal(birth3, w, birth_levels[[3L]])
+  pop_birthplace_unknown <- wtotal_outside(birth3, w, birth_levels)
+  check_residence_birth_counts(
+    birth3, w, pop,
+    c(pop_uk_born, pop_eu_born, pop_non_eu_born),
+    pop_birthplace_unknown
+  )
+  birthplace_missing_rate <- if (is.finite(pop) && pop > 0) {
+    pop_birthplace_unknown / pop
+  } else {
+    NA_real_
+  }
+
   stats <- c(
     list(
       n = as.integer(sum(person)),
-      pop = sum(w[person]),
+      pop = pop,
+      pop_uk_born = pop_uk_born,
+      pop_eu_born = pop_eu_born,
+      pop_non_eu_born = pop_non_eu_born,
+      pop_birthplace_unknown = pop_birthplace_unknown,
+      birthplace_missing_rate = birthplace_missing_rate,
       mean_age = wmean(col(df, "AGE"), w),
       mean_age_uk_born = wmean(col(df, "AGE"), w, among = uk_born),
       median_age = wmedian(col(df, "AGE"), w),
