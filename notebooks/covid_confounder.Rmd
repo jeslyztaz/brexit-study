@@ -4,21 +4,13 @@ subtitle: "Regional Covid deaths (ONS) as the Covid control"
 output: html_document
 ---
 
-## Purpose
-
-The end of the Brexit transition period (31 Dec 2020) coincides with Covid, so Covid conditions may confound
-the link between immigration and wages. Following the professor's advice we (i) acknowledge this up front,
-(ii) add Covid controls, and (iii) drop 2020, the year Covid hit hardest, and check whether the baseline result holds.
-
-**Covid control: ONS Covid-19 deaths by area (regional).** One number per area (age-standardised deaths per 100,000
-in 2020, 2021, or both) is a *snapshot*. On its own it is absorbed by the area fixed effects, so we interact it
-with **year dummies**: areas hit harder by Covid are allowed to follow different paths over time.
+**Covid control: ONS Covid-19 deaths by area (regional).** One number per area (age-standardised mortality rates (ASMR)
+per 100,000 in 2020, 2021, or both) is a *snapshot*. On its own it is absorbed by the area fixed effects, so we 
+interact it with **year dummies**: areas hit harder by Covid are allowed to follow different paths over time.
 We use 2020 deaths as the main version (measured before the end of the transition period, so post-Brexit migration
 cannot affect it). 2021 and 2020+2021 are robustness checks. ONS covers England and Wales only, so these
 regressions use **17 of the 20 areas** (no Strathclyde, Rest of Scotland, Northern Ireland).
 Quarter-by-quarter interactions are too many parameters for 17 areas, so we use year dummies.
-
-Reading the output: the question is whether the first stage stays strong and whether the wage estimates change materially.
 
 ## 0. Setup
 
@@ -145,6 +137,7 @@ print(bind_rows(base20_B, base20_B2), digits = 3)
 ```
 
 ## 4. Covid control: ONS Covid deaths (regional) x year dummies, 17 areas
+##   the age-standardised mortality rate (ASMR), meaning Covid deaths per 100,000 people adjusted for age, for 2020, 2021, or both.
 
 ```{r ons-data}
 ons <- readr::read_csv(ons_file, show_col_types = FALSE)
@@ -196,11 +189,3 @@ readr::write_csv(bind_rows(base20_A$row, tabA_ons), file.path(output_dir, "covid
 readr::write_csv(bind_rows(base20_B, base20_B2, tabB_ons), file.path(output_dir, "covid_sectionB_results.csv"))
 message("Saved to: ", output_dir)
 ```
-
-## Interpretation notes for the write-up
-
-1. If the first stage stays strong and the wage estimates barely move across rows, Covid is not driving the baseline result.
-   Report both the point estimates and the standard errors; "not significant" means the data cannot rule out zero, not that the effect is zero.
-2. The ONS control is regional, but covers 17 areas only, and 2021 deaths are measured after the Brexit shock, so 2020 deaths is the main version.
-3. With 17 to 20 clusters, clustered p-values can be too small; a wild-cluster bootstrap would be more credible if time allows.
-4. Section B includes 2020 in the pre-period; the "drop 2020" rows are the professor's suggested robustness check.
