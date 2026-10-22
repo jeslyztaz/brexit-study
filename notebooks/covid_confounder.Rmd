@@ -1,28 +1,21 @@
 ---
-title: "EC4362 - Covid confounder for the shift-share IV"
+title: "Covid confounder for the shift-share IV"
 subtitle: "Regional Covid deaths (ONS) as the main control; nation-level OxCGRT controls as a secondary check"
 output: html_document
 ---
 
 ## Purpose
 
-The end of the Brexit transition period (31 Dec 2020) coincides with Covid, so Covid conditions may confound
-the link between immigration and wages. Following the professor's advice we (i) acknowledge this up front,
-(ii) add Covid controls, and (iii) drop 2020, the year Covid hit hardest, and check whether the baseline result holds.
-
 **Main control: ONS Covid-19 deaths by area (regional).** One number per area (age-standardised deaths per 100,000
 in 2020, 2021, or both) is a *snapshot*. On its own it is absorbed by the area fixed effects, so we interact it
 with **year dummies**: areas hit harder by Covid are allowed to follow different paths over time.
 We use 2020 deaths as the main version (measured before the end of the transition period, so post-Brexit migration
-cannot affect it). 2021 and 2020+2021 are robustness checks. ONS covers England and Wales only, so these
-regressions use **17 of the 20 areas** (no Strathclyde, Rest of Scotland, Northern Ireland).
+cannot affect it). 2021 and 2020+2021 are robustness checks.
 Quarter-by-quarter interactions are too many parameters for 17 areas, so we use year dummies.
 
 **Secondary check: OxCGRT stringency and new cases per 100,000, by UK nation.** Available for all 20 areas, but it only varies
 across 4 nations (all 16 English areas share England's value), and quarter fixed effects already absorb the part common
-to all areas. Treat it as a robustness check, not as a full control.
-
-Reading the output: the question is whether the first stage stays strong and whether the wage estimates change materially.
+to all areas. 
 
 ## 0. Setup
 
@@ -32,7 +25,8 @@ missing_packages <- setdiff(needed, rownames(installed.packages()))
 if (length(missing_packages)) stop("Install these packages first: ", paste(missing_packages, collapse = ", "))
 invisible(lapply(needed, library, character.only = TRUE))
 
-project_dir <- dirname(getwd())     # repo root, since this notebook sits in notebooks/
+#project_dir <- path.expand("~/Downloads/EC4362 R")
+project_dir <- dirname(getwd())
 panel_file  <- file.path(project_dir, "data/processed/residence_quarter_panel.csv")
 ons_file    <- file.path(project_dir, "data/processed/ons_covid_by_area.csv")
 oxcgrt_file <- file.path(project_dir, "data/processed/oxcgrt_uk_nations_quarterly.csv")
@@ -54,7 +48,7 @@ panel <- panel %>%
          period = paste0(year, "Q", quarter))      # one label per calendar quarter = quarter fixed effects
 ```
 
-## 1. Shift-share variables (same construction as the IV notebook)
+## 1. Shift-share variables 
 
 ```{r iv-variables}
 local_ratio <- panel %>%
@@ -259,12 +253,3 @@ readr::write_csv(bind_rows(tabA_ons, tabA_nat) %>% distinct(), file.path(output_
 readr::write_csv(bind_rows(tabB_ons, tabB_nat) %>% distinct(), file.path(output_dir, "covid_sectionB_results.csv"))
 message("Saved to: ", output_dir)
 ```
-
-## Interpretation notes for the write-up
-
-1. If the first stage stays strong and the wage estimates barely move across rows, Covid is not driving the baseline result.
-   Report both the point estimates and the standard errors; "not significant" means the data cannot rule out zero, not that the effect is zero.
-2. The ONS control is regional, but covers 17 areas only, and 2021 deaths are measured after the Brexit shock, so 2020 deaths is the main version.
-3. The OxCGRT control varies across 4 nations only, so it is weak evidence even when it changes nothing.
-4. With 17 to 20 clusters, clustered p-values can be too small; a wild-cluster bootstrap would be more credible if time allows.
-5. Section B includes 2020 in the pre-period; the "drop 2020" rows are the professor's suggested robustness check.
