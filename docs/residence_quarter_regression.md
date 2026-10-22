@@ -96,6 +96,8 @@ Area columns are matched within `residence`. National columns are matched on the
 `d_yoy_national_ratio_migrant`, `d_yoy_national_ratio_eu`, `d_yoy_national_ratio_non_eu`
 `d_qoq_mean_log_hourpay`, `d_qoq_mean_log_hourpay_uk_born`
 `d_yoy_mean_log_hourpay`, `d_yoy_mean_log_hourpay_uk_born`
+`d_qoq_mean_age_uk_born`, `d_qoq_share_uk_degree`, `d_qoq_share_uk_low_qual`
+`d_qoq_share_uk_asian`, `d_qoq_share_uk_black`, `d_qoq_share_uk_chinese`, `d_qoq_share_uk_eth_other`
 
 `d_yoy_ratio_migrant_l4`, `d_yoy_ratio_eu_l4`, and `d_yoy_ratio_non_eu_l4` are the year-on-year ratio changes dated four quarters earlier. In quarter *t* that is the ratio at *t*−4 minus the ratio at *t*−8.
 
@@ -125,7 +127,7 @@ For each area and quarter, the leave-one-out national ratio keeps every area exc
 
 ## UK-born controls
 
-These are contemporaneous. They are person-weighted, ages 16–64, and restricted to UK-born residents. Unknown birthplace is not in the denominator.
+The levels are contemporaneous. They are person-weighted, ages 16–64, and restricted to UK-born residents. Unknown birthplace is not in the denominator.
 
 `mean_age_uk_born` is copied from the panel: the person-weighted mean of `AGE` among UK-born residents in the 16–64 sample. `AGE` is not recoded inside that range.
 
@@ -133,6 +135,10 @@ The qualification controls start from the panel's UK-born qualification shares, 
 
 `share_uk_low_qual` uses the same denominator. Its numerator is the sum of "GCSE grades A*-C or equivalent", "Other qualifications", and "No qualification". Higher education and A-level are not columns.
 
+`d_qoq_mean_age_uk_born`, `d_qoq_share_uk_degree`, and `d_qoq_share_uk_low_qual` are those three controls minus their values one calendar quarter earlier in the same residence. The level of each control remains in the file.
+
 The ethnicity controls start from the panel's six UK-born ethnicity shares. The UKDA codes behind those groups are listed under Ethnicity. Those shares are among UK-born residents with a known ethnicity group, and they sum to 1. Chinese is kept out of Asian. Where the LFS lists them separately, Asian is Indian, Pakistani, Bangladeshi, and other Asian, and on `ETHUK14` it also includes the Asian or Asian British code.
 
 `share_uk_asian`, `share_uk_black`, and `share_uk_chinese` divide the matching panel share by the sum of the six ethnicity shares. When that sum is 1, each equals the panel share. `share_uk_eth_other` divides the sum of the mixed share and the residual other share by the same total. White is not a column.
+
+`d_qoq_share_uk_asian`, `d_qoq_share_uk_black`, `d_qoq_share_uk_chinese`, and `d_qoq_share_uk_eth_other` are those four shares minus their values one calendar quarter earlier in the same residence. The level of each share remains in the file.

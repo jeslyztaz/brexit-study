@@ -24,6 +24,11 @@
 # panel columns that end in _uk_born. Chinese is its own share. White is
 # the omitted ethnicity. Higher education and A-level are the omitted
 # middle of the qualification split.
+#
+# Age, qualification, and ethnicity controls are also stored as
+# quarter-to-quarter changes. A QoQ wage equation uses those changes, with
+# the same one-quarter gap as d_qoq_mean_log_hourpay. The levels stay for a
+# levels specification. White is omitted, so it has no change column.
 
 construct_variables <- function(panel) {
   required <- c(
@@ -188,6 +193,17 @@ construct_variables <- function(panel) {
   if (nrow(out) != n_before) {
     stop("UK-born controls changed the row count.", call. = FALSE)
   }
+  # Same one-quarter gap as the QoQ wage change. Levels remain above.
+  out <- difference_from(
+    out,
+    c(
+      "mean_age_uk_born", "share_uk_degree", "share_uk_low_qual",
+      "share_uk_asian", "share_uk_black", "share_uk_chinese",
+      "share_uk_eth_other"
+    ),
+    1L,
+    "d_qoq_"
+  )
 
   out %>% arrange(residence, year, quarter)
 }
