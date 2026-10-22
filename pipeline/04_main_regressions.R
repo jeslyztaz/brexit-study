@@ -1,8 +1,8 @@
 # UK-born quarter-to-quarter log wages on quarter-to-quarter migrant ratios.
 #
-# Sample is 2016 Q1-2026 Q2. The 2010-2015 quarters stay out because they
-# build the baseline shares. The instrument, shift_share_qoq_*, is that
-# baseline ratio times the leave-one-out national quarter-to-quarter change.
+# Sample is 2016 Q1 onward. The instrument, shift_share_qoq_*, is the
+# 2017-2019 baseline ratio times the leave-one-out national
+# quarter-to-quarter change.
 #
 # Two designs, each estimated by OLS and 2SLS:
 #   pooled: one endogenous variable, d_qoq_ratio_migrant

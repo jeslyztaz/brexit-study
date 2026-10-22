@@ -105,13 +105,13 @@ Area columns are matched within `residence`. National columns are matched on the
 
 ## Baselines
 
-The baseline window is 2010 Q1 through 2015 Q4 inclusive. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite.
+The baseline window is 2017 Q1 through 2019 Q4 inclusive. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite. This window includes 2017 Q1–Q2, when birthplace is `CRYOX7`, and 2017 Q3 through 2019 Q4, when it is `CRYOX7_EUL_Main`.
 
-`baseline_ratio_migrant` = sum of `migrant` / sum of `native` over that window, inside the residence. `baseline_ratio_eu` and `baseline_ratio_non_eu` use `eu` and `non_eu` as the numerator. This is the pooled stock, not the average of the quarterly ratios. The sums use the birthplace totals, so a quarter with more missing birthplace is not scaled up. The same value is written on every quarter for that residence, including quarters outside 2010–2015.
+`baseline_ratio_migrant` = sum of `migrant` / sum of `native` over that window, inside the residence. `baseline_ratio_eu` and `baseline_ratio_non_eu` use `eu` and `non_eu` as the numerator. This is the pooled stock, not the average of the quarterly ratios. The sums use the birthplace totals, so a quarter with more missing birthplace is not scaled up. The same value is written on every quarter for that residence, including quarters outside 2017–2019.
 
 `baseline_national_ratio_migrant`, `baseline_national_ratio_eu`, and `baseline_national_ratio_non_eu` are the same pooled ratios with the sums taken over all twenty areas. Each one is a single number, repeated on every row.
 
-The same construction is also stored for 2017 Q1 through 2019 Q4. Those columns end in `_2017_2019`: `baseline_ratio_migrant_2017_2019`, `baseline_ratio_eu_2017_2019`, `baseline_ratio_non_eu_2017_2019`, and the three `baseline_national_ratio_*_2017_2019` columns. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite. The 2010–2015 columns are unchanged. This window includes 2017 Q1–Q2, when birthplace is `CRYOX7`, and 2017 Q3 through 2019 Q4, when it is `CRYOX7_EUL_Main`.
+The same construction is also stored for 2010 Q1 through 2015 Q4. Those columns end in `_2010_2015`: `baseline_ratio_migrant_2010_2015`, `baseline_ratio_eu_2010_2015`, `baseline_ratio_non_eu_2010_2015`, and the three `baseline_national_ratio_*_2010_2015` columns. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite.
 
 ## Wages
 
@@ -125,13 +125,13 @@ The same construction is also stored for 2017 Q1 through 2019 Q4. Those columns 
 
 For each area and quarter, the leave-one-out national ratio keeps every area except that one. For migrants it is (national migrant count − the area's `migrant`) / (national native count − the area's `native`). EU and non-EU use their own numerators and the same native denominator. The national counts are the sums of the area counts.
 
-`shift_share_qoq_migrant` = `baseline_ratio_migrant` × the quarter-to-quarter change in that leave-one-out migrant ratio. `shift_share_yoy_migrant` uses the year-on-year change. The EU columns use `baseline_ratio_eu` and the leave-one-out EU ratio. The non-EU columns use `baseline_ratio_non_eu` and the leave-one-out non-EU ratio.
+The unsuffixed shift-shares use the 2017–2019 baseline. `shift_share_qoq_migrant` = `baseline_ratio_migrant` × the quarter-to-quarter change in that leave-one-out migrant ratio. `shift_share_yoy_migrant` uses the year-on-year change. The EU columns use `baseline_ratio_eu` and the leave-one-out EU ratio. The non-EU columns use `baseline_ratio_non_eu` and the leave-one-out non-EU ratio.
 
 `shift_share_qoq_eu`, `shift_share_qoq_non_eu`, `shift_share_yoy_eu`, `shift_share_yoy_non_eu`
 
 `shift_share_yoy_migrant_l4`, `shift_share_yoy_eu_l4`, and `shift_share_yoy_non_eu_l4` are those year-on-year shift-shares dated four quarters earlier. The leave-one-out ratios themselves are not in the file.
 
-`shift_share_qoq_migrant_2017_2019` = `baseline_ratio_migrant_2017_2019` × the same quarter-to-quarter leave-one-out change. The EU, non-EU, and year-on-year columns follow the same pattern: `shift_share_qoq_eu_2017_2019`, `shift_share_qoq_non_eu_2017_2019`, `shift_share_yoy_migrant_2017_2019`, `shift_share_yoy_eu_2017_2019`, and `shift_share_yoy_non_eu_2017_2019`. `shift_share_yoy_migrant_2017_2019_l4`, `shift_share_yoy_eu_2017_2019_l4`, and `shift_share_yoy_non_eu_2017_2019_l4` are those year-on-year shift-shares dated four quarters earlier.
+`shift_share_qoq_migrant_2010_2015` = `baseline_ratio_migrant_2010_2015` × the same quarter-to-quarter leave-one-out change. The EU, non-EU, and year-on-year columns follow the same pattern: `shift_share_qoq_eu_2010_2015`, `shift_share_qoq_non_eu_2010_2015`, `shift_share_yoy_migrant_2010_2015`, `shift_share_yoy_eu_2010_2015`, and `shift_share_yoy_non_eu_2010_2015`. `shift_share_yoy_migrant_2010_2015_l4`, `shift_share_yoy_eu_2010_2015_l4`, and `shift_share_yoy_non_eu_2010_2015_l4` are those year-on-year shift-shares dated four quarters earlier.
 
 ## UK-born controls
 

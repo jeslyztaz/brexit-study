@@ -25,9 +25,9 @@
 # migration. qoq and yoy instruments are both stored. The regression
 # chooses which one to use. Rows are not restricted to a sample.
 #
-# baseline_ratio_* and shift_share_* use the 2010-2015 pooled stock. The
-# same construction for 2017-2019 is stored on the columns that end in
-# _2017_2019. The leave-one-out change is the same in both.
+# baseline_ratio_* and shift_share_* use the 2017-2019 pooled stock. The
+# same construction for 2010-2015 is stored on the columns that end in
+# _2010_2015. The leave-one-out change is the same in both.
 #
 # UK-born age, qualification, and ethnicity controls are read from the
 # panel columns that end in _uk_born. Chinese is its own share. White is
@@ -153,7 +153,7 @@ construct_variables <- function(panel) {
   out <- copy_from(out, yoy_cols, 4L, "_l4")
 
   baseline_rows <- out %>%
-    filter(year >= 2010L, year <= 2015L) %>%
+    filter(year >= 2017L, year <= 2019L) %>%
     filter(is.finite(native), is.finite(eu), is.finite(non_eu))
   baseline <- baseline_rows %>%
     group_by(residence) %>%
@@ -166,7 +166,7 @@ construct_variables <- function(panel) {
   if (any(!is.finite(baseline$baseline_ratio_migrant))) {
     bad <- baseline$residence[!is.finite(baseline$baseline_ratio_migrant)]
     stop(
-      "No usable 2010-2015 native total for: ",
+      "No usable 2017-2019 native total for: ",
       paste(bad, collapse = ", "), ".",
       call. = FALSE
     )
@@ -188,17 +188,17 @@ construct_variables <- function(panel) {
   values_agree(
     out$baseline_national_ratio_migrant,
     rep(ratio_or_na(sum(baseline_rows$migrant), baseline_native_total), nrow(out)),
-    "2010-2015 national migrant baseline"
+    "2017-2019 national migrant baseline"
   )
   values_agree(
     out$baseline_national_ratio_eu,
     rep(ratio_or_na(sum(baseline_rows$eu), baseline_native_total), nrow(out)),
-    "2010-2015 national EU baseline"
+    "2017-2019 national EU baseline"
   )
   values_agree(
     out$baseline_national_ratio_non_eu,
     rep(ratio_or_na(sum(baseline_rows$non_eu), baseline_native_total), nrow(out)),
-    "2010-2015 national non-EU baseline"
+    "2017-2019 national non-EU baseline"
   )
   out <- out %>%
     mutate(
@@ -220,15 +220,15 @@ construct_variables <- function(panel) {
     4L,
     "_l4"
   )
-  # Same pooled stock and shift-share, with the 2017-2019 baseline ratio.
+  # Same pooled stock and shift-share, with the 2010-2015 baseline ratio.
   # The leave-one-out changes above are not rebuilt.
-  out <- attach_baseline_shift_share(out, 2017L, 2019L, "_2017_2019")
+  out <- attach_baseline_shift_share(out, 2010L, 2015L, "_2010_2015")
   out <- copy_from(
     out,
     c(
-      "shift_share_yoy_migrant_2017_2019",
-      "shift_share_yoy_eu_2017_2019",
-      "shift_share_yoy_non_eu_2017_2019"
+      "shift_share_yoy_migrant_2010_2015",
+      "shift_share_yoy_eu_2010_2015",
+      "shift_share_yoy_non_eu_2010_2015"
     ),
     4L,
     "_l4"
@@ -468,7 +468,7 @@ stop_unless_baseline_window <- function(panel, year_min, year_max) {
 
 # Pooled baseline ratios and the shift-shares that multiply them by the
 # leave-one-out changes already on data. suffix is appended to the
-# 2010-2015 column names. A quarter counts only when native, eu, and
+# baseline column names. A quarter counts only when native, eu, and
 # non_eu are all finite.
 attach_baseline_shift_share <- function(data, year_min, year_max, suffix) {
   label <- paste0(year_min, "-", year_max)

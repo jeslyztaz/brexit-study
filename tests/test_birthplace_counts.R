@@ -301,32 +301,40 @@ expect_close(north_q1$national_ratio_eu, 350 / 2200, "2010 Q1 national EU ratio"
 expect_close(north_q1$national_ratio_non_eu, 200 / 2200, "2010 Q1 national non-EU ratio")
 expect_close(north_q2$national_ratio_migrant, 750 / 1800, "2010 Q2 national migrant ratio")
 expect_close(north_q2$ratio_migrant, 0.15, "North regional migrant ratio")
+expect_close(north_q2$baseline_ratio_migrant, 0.15, "North 2017-2019 baseline")
 expect_close(north_q2$shift_share_qoq_migrant, 0.0625, "North 2010 Q2 shift-share")
 expect_close(north_2011$shift_share_qoq_migrant, -0.0625, "North 2011 Q1 quarter-to-quarter shift-share")
 expect_close(north_2011$shift_share_yoy_migrant, 0, "North 2011 Q1 year-on-year shift-share")
-expect_close(unique(london_rows$baseline_ratio_migrant), 1 / 3, "London 2010-2015 baseline")
-window_2010 <- merged$year >= 2010 & merged$year <= 2015
-pooled_native_2010 <- sum(merged$native[window_2010])
+expect_close(unique(london_rows$baseline_ratio_migrant), 0.5, "London 2017-2019 baseline")
+window_2017 <- merged$year >= 2017 & merged$year <= 2019
+pooled_native_2017 <- sum(merged$native[window_2017])
 expect_close(
   unique(merged$baseline_national_ratio_migrant),
-  sum(merged$migrant[window_2010]) / pooled_native_2010,
-  "2010-2015 national baseline"
+  sum(merged$migrant[window_2017]) / pooled_native_2017,
+  "2017-2019 national baseline"
 )
 expect_close(
   unique(merged$baseline_national_ratio_eu),
-  sum(merged$eu[window_2010]) / pooled_native_2010,
-  "2010-2015 national EU baseline"
+  sum(merged$eu[window_2017]) / pooled_native_2017,
+  "2017-2019 national EU baseline"
 )
 expect_close(
   unique(merged$baseline_national_ratio_non_eu),
-  sum(merged$non_eu[window_2010]) / pooled_native_2010,
-  "2010-2015 national non-EU baseline"
+  sum(merged$non_eu[window_2017]) / pooled_native_2017,
+  "2017-2019 national non-EU baseline"
 )
 expect_close(
-  unique(london_rows$baseline_ratio_migrant_2017_2019), 0.5,
-  "London 2017-2019 baseline"
+  unique(london_rows$baseline_ratio_migrant_2010_2015), 1 / 3,
+  "London 2010-2015 baseline"
 )
-if (abs(unique(london_rows$baseline_ratio_migrant) - 2 / 7) < 1e-8) {
+window_2010 <- merged$year >= 2010 & merged$year <= 2015
+pooled_native_2010 <- sum(merged$native[window_2010])
+expect_close(
+  unique(merged$baseline_national_ratio_migrant_2010_2015),
+  sum(merged$migrant[window_2010]) / pooled_native_2010,
+  "2010-2015 national baseline"
+)
+if (abs(unique(london_rows$baseline_ratio_migrant_2010_2015) - 2 / 7) < 1e-8) {
   stop("London baseline still uses pop times the birth share.", call. = FALSE)
 }
 pass("national, leave-one-out, baseline, and shift-share counts")
