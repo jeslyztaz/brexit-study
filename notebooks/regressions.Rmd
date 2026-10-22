@@ -1,0 +1,248 @@
+---
+title: "Regressions"
+output: html_document
+date: "2026-10-21"
+---
+
+## 1. Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+needed <- c("dplyr", "readr", "fixest", "ggplot2")
+missing_packages <- setdiff(needed, rownames(installed.packages()))
+if (length(missing_packages)) stop("Install these packages first: ", paste(missing_packages, collapse = ", "))
+invisible(lapply(needed, library, character.only = TRUE))
+
+#project_dir <- path.expand("~/Downloads/EC4362 R")
+project_dir <- dirname(getwd())
+panel_file <- file.path(project_dir, "data/processed/residence_quarter_panel.csv")
+output_dir <- file.path(project_dir, "outputs")
+if (!file.exists(panel_file)) stop("Cannot find: ", panel_file)
+dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
+
+panel <- readr::read_csv(panel_file, show_col_types = FALSE)
+#required <- c("residence", "year", "quarter", "pop", "share_birth_uk",
+#              "share_birth_other_europe", "share_birth_asia", "share_birth_rest",
+#              "mean_log_hourpay")
+#missing_cols <- setdiff(required, names(panel))
+#if (length(missing_cols)) stop("Missing columns: ", paste(missing_cols, collapse = ", "))
+#if (anyDuplicated(panel[c("residence", "year", "quarter")])) stop("Duplicate region-quarter rows")
+
+panel <- panel %>%
+  mutate(year = as.integer(year), quarter = as.integer(quarter),
+         time = year + (quarter - 1) / 4,
+         period = paste0(year, "Q", quarter))
+```
+
+## 2. Original regional ratios, national quarterly shifts, and 2017–2019 exposure
+
+These formulas follow `notebooks/explore_data_cleaning.Rmd` on branch `cq` of the group's repository. `d_ratio` is the change **from the previous quarter**, and `g` is the change in the national ratio **from the previous quarter**.
+
+```{r original-variables}
+birth_new <- panel %>%
+  transmute(
+    residence, year, quarter, time, period, mean_log_hourpay,
+    `UK-born` = 100 * share_birth_uk,
+    Other = 100 * (share_birth_eu + share_birth_non_eu)
+  ) %>%
+  mutate(non_EU_born_ratio = Other / `UK-born`)
+
+local_ratio <- birth_new %>%
+  transmute(residence, year, quarter, time, period, mean_log_hourpay,
+            ratio = non_EU_born_ratio) %>%
+  arrange(residence, year, quarter) %>%
+  group_by(residence) %>%
+  mutate(d_ratio = ratio - lag(ratio)) %>%
+  ungroup()
+
+national <- panel %>%
+  group_by(year, quarter) %>%
+  summarise(
+    national_ratio = sum(pop * (share_birth_eu + share_birth_non_eu), na.rm = TRUE) /
+      sum(pop * share_birth_uk, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(year, quarter) %>%
+  mutate(g = national_ratio - lag(national_ratio),
+         g_lag = lag(g))
+
+baseline <- local_ratio %>%
+  filter(year >= 2017, year <= 2019) %>%
+  group_by(residence) %>%
+  summarise(baseline = mean(ratio, na.rm = TRUE), .groups = "drop")
+
+# Same quarterly shift-share construction as the group's source notebook:
+quarterly_iv_panel <- local_ratio %>%
+  inner_join(baseline, by = "residence") %>%
+  inner_join(select(national, year, quarter, g, g_lag), by = c("year", "quarter")) %>%
+  mutate(
+    shift_share = baseline * g,
+    shift_share_lag = baseline * g_lag
+  )
+
+print(baseline)
+```
+
+# Section A — Original IV
+
+## 3. Original post-2020 first stage (preserved)
+
+This is the group's original regression: `d_ratio ~ shift_share + shift_share_lag`, with residence and quarter fixed effects, clustered by residence. The group's source uses `residence + year^quarter`; here `period` encodes exactly the same calendar-quarter fixed effects.
+
+```{r original-first-stage}
+post <- quarterly_iv_panel %>%
+  filter(time > 2020 + 3 / 4)
+
+first_stage_original <- feols(
+  d_ratio ~ shift_share + shift_share_lag | residence + period,
+  data = post,
+  vcov = ~ residence
+)
+print(summary(first_stage_original))
+cat("\nOriginal IV: squared clustered t-statistic on shift_share:\n")
+print(coeftable(first_stage_original)["shift_share", "t value"]^2)
+```
+
+## 4. Original instrument applied to the wage equation (new second stage, NOT in group's source)
+
+To estimate a wage effect, we add a second stage while **keeping the same `d_ratio`, `shift_share`, `shift_share_lag`, region FE, quarter FE and clustering**. As in the group's first stage, `shift_share_lag` is included as an ordinary control. Only `shift_share` is the excluded instrument for `d_ratio`.
+
+```{r original-wage-iv}
+wage_post <- quarterly_iv_panel %>%
+  arrange(residence, year, quarter) %>%
+  group_by(residence) %>%
+  mutate(
+    d_log_hourpay = mean_log_hourpay -
+      lag(mean_log_hourpay)
+  ) %>%
+  ungroup() %>%
+  filter(
+    is.finite(d_log_hourpay),
+    is.finite(d_ratio),
+    is.finite(shift_share)
+  )
+
+iv_combined_fd <- feols(
+  d_log_hourpay ~ 1 | period |
+    d_ratio ~ shift_share,
+  data = wage_post,
+  vcov = ~ residence
+)
+
+print(summary(iv_combined_fd))
+print(fitstat(iv_combined_fd, ~ ivf + ivwald1))
+```
+
+# Section B — Combined pre/post DiD-style IV using the SAME quarterly shift-share IV
+
+## 5. Keep original IV; add a post-2021 interaction
+
+We retain the **original** `shift_share = baseline * g`. The *only new instrument variable* is its interaction with the post-2021 indicator, `shift_share_post = shift_share * post2021`. This is not a replacement for the original IV.
+
+We also interact the **original** quarterly immigration change with the same indicator: `d_ratio_post = d_ratio * post2021`.
+
+- `d_ratio` coefficient: pre-2021 slope.
+- `d_ratio_post` coefficient: difference in the slope after 2021.
+- Sum of both coefficients: post-2021 slope.
+
+The interaction model uses both pre- and post-2021 observations (from 2017 onward). The lagged shift-share is kept as an exogenous control, as in the group's original specification.
+
+```{r interaction-data}
+interaction_data <- quarterly_iv_panel %>%
+  filter(year >= 2017) %>%
+  mutate(
+    post2021 = as.integer(year >= 2021),
+    d_ratio_post = d_ratio * post2021,
+    shift_share_post = shift_share * post2021
+  ) %>%
+  filter(is.finite(mean_log_hourpay), is.finite(d_ratio),
+         is.finite(d_ratio_post), is.finite(shift_share),
+         is.finite(shift_share_post), is.finite(shift_share_lag))
+
+print(interaction_data %>%
+  summarise(observations = n(), regions = n_distinct(residence),
+            quarters = n_distinct(period),
+            pre_obs = sum(post2021 == 0),
+            post_obs = sum(post2021 == 1)))
+
+readr::write_csv(interaction_data, file.path(output_dir, "original_quarterly_IV_interaction_data.csv"))
+```
+
+## 6. Combined pre/post interaction-IV estimation
+
+There are **two endogenous regressors** (`d_ratio` and `d_ratio_post`) and **two excluded instruments** (`shift_share` and `shift_share_post`). This is necessary: the post interaction of an endogenous regressor is itself endogenous.
+
+```{r combined-iv}
+combined_iv <- feols(
+  mean_log_hourpay ~ shift_share_lag | residence + period |
+    d_ratio + d_ratio_post ~ shift_share + shift_share_post,
+  data = interaction_data,
+  vcov = ~ residence
+)
+
+print(summary(combined_iv))
+cat("\nFirst-stage diagnostics (inspect BOTH endogenous variables):\n")
+print(fitstat(combined_iv, ~ ivf + ivwald1))
+```
+
+## 7. Compute the actual post-2021 slope and its standard error
+
+The post-2021 slope is the sum of the two estimated IV coefficients. Its standard error must account for the covariance between them; do not just add standard errors.
+
+```{r post-effect}
+b <- coef(combined_iv)
+V <- vcov(combined_iv)
+
+# fixest prefixes fitted endogenous regressors with "fit_".
+pre_name <- "fit_d_ratio"
+interaction_name <- "fit_d_ratio_post"
+if (!all(c(pre_name, interaction_name) %in% names(b))) {
+  stop("Unexpected coefficient names. Inspect names(coef(combined_iv)).")
+}
+
+pre_effect <- unname(b[pre_name])
+post_effect <- unname(b[pre_name] + b[interaction_name])
+post_var <- V[pre_name, pre_name] + V[interaction_name, interaction_name] +
+  2 * V[pre_name, interaction_name]
+post_se <- sqrt(post_var)
+post_t <- post_effect / post_se
+
+# Approximate two-sided p-value using clusters - 1 degrees of freedom.
+n_regions <- n_distinct(interaction_data$residence)
+post_p_approx <- 2 * pt(-abs(post_t), df = n_regions - 1)
+
+comparison <- data.frame(
+  quantity = c("Pre-2021 immigration slope", "Post-minus-pre slope difference",
+               "Post-2021 immigration slope"),
+  estimate = c(pre_effect, unname(b[interaction_name]), post_effect),
+  std_error = c(sqrt(V[pre_name, pre_name]),
+                sqrt(V[interaction_name, interaction_name]), post_se),
+  p_value_approx = c(NA_real_, NA_real_, post_p_approx)
+)
+print(comparison)
+cat("\nNote: post-slope p-value uses an approximate t reference with 19 degrees of freedom.\n")
+readr::write_csv(comparison, file.path(output_dir, "original_IV_pre_post_slope_comparison.csv"))
+```
+
+## 8. Save a summary of sample sizes
+
+```{r export}
+sample_summary <- data.frame(
+  model = c("Original first stage", "Original wage IV",
+            "Combined pre/post interaction-IV"),
+  observations = c(nobs(first_stage_original), nobs(iv_original),
+                   nobs(combined_iv))
+)
+print(sample_summary)
+readr::write_csv(sample_summary, file.path(output_dir, "original_IV_model_sample_sizes.csv"))
+message("CSV outputs saved to: ", output_dir)
+```
+
+## Important identification and interpretation cautions
+
+1. **The group's original IV is preserved** in Section A. Section B adds an interaction instrument derived from that same original IV, not a new cumulative migration-shift definition.
+2. **The combined model is DiD-style, not a proven causal DiD-IV.** Region and quarter fixed effects plus a post-2021 interaction do not, by themselves, establish parallel trends or a valid external shock.
+3. **Instrument validity is unproven.** Historical migrant exposure may correlate with regional economic structure and COVID recovery. National migration shifts may reflect wage-relevant shocks.
+4. **Weak instruments:** With two endogenous regressors, inspect both first stages and consider conditional weak-IV diagnostics; a significant ordinary coefficient is not sufficient.
+5. **Outcome and treatment mismatch:** The wage outcome covers all eligible workers, and the immigration measure is a change in population stock ratios, not new arrivals or incumbent workers' wages.
+6. **Sample periods differ:** The original IV is post-2020; the interaction-IV uses 2017 onward. Coefficients are not mechanically directly comparable.
+7. **20 clusters:** Standard clustered inference can be imprecise; consider robustness checks and small-cluster methods.
