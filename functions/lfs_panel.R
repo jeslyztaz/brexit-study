@@ -148,6 +148,10 @@ share_columns <- function(x, w, named_levels, among = TRUE) {
   lapply(named_levels, function(level) wshare(x, w, level, among = among))
 }
 
+with_suffix <- function(named, suffix) {
+  setNames(named, paste0(names(named), suffix))
+}
+
 col <- function(df, name) {
   if (!name %in% names(df)) return(rep(NA, nrow(df)))
   df[[name]]
@@ -194,7 +198,9 @@ highest_numbered_column <- function(nms, prefix) {
 }
 
 # Columns the residence-quarter panel actually aggregates. The first name
-# present in the file wins, same rule as shrink_lfs_cs().
+# present in the file wins, same rule as shrink_lfs_cs(). Every ethnicity
+# candidate on the file is loaded, so that rule can skip one that is
+# entirely missing and use a later name.
 panel_keep <- c(
   "YEAR", "MONTH", "SEX", "AGE", "HOURPAY", "HRRATE", "SAMEGROSS",
   "USUALHRS", "ACTUALHRS", "WRKING", "STATR", "UNDEMP", "ACTIVITY",
@@ -210,7 +216,9 @@ panel_source_columns <- function(header, pwt_name, piwt_name) {
     hit <- candidates[candidates %in% header]
     if (length(hit) == 0L) NA_character_ else hit[[1]]
   }, character(1))
-  unique(c(pwt_name, piwt_name, chosen[!is.na(chosen)]))
+  ethnicity <- lfs_cs_candidates$ETHNICITY
+  ethnicity <- ethnicity[ethnicity %in% header]
+  unique(c(pwt_name, piwt_name, chosen[!is.na(chosen)], ethnicity))
 }
 
 # Calendar-quarter person files only. Two files for the same quarter: keep
@@ -509,21 +517,40 @@ stop_if_codes_present <- function(lfs, file) {
   }
 }
 
-# Six groups that line up across ETHUKEUL, ETHCEN6, and ETH01. Chinese is
-# kept separate from Asian in all three code lists.
+# Six groups. Chinese stays separate from Asian. ETHCEN6 and ETH01 have
+# one Asian code. ETHUKEUL, ETHUK14, and ETHUK8 separate Indian,
+# Pakistani, and Bangladeshi, which are collapsed into Asian here.
 ethnicity_group <- function(code, origin, file) {
-  lut <- if (origin == "ETHUKEUL") {
-    c(
+  six <- c(
+    "1" = "white", "2" = "mixed", "3" = "asian", "4" = "black",
+    "5" = "chinese", "6" = "other"
+  )
+  luts <- list(
+    ETHUKEUL = c(
       "1" = "white", "2" = "mixed", "3" = "asian", "4" = "asian",
       "5" = "asian", "6" = "chinese", "7" = "asian", "8" = "black",
       "9" = "other"
+    ),
+    ETHCEN6 = six,
+    ETH01 = six,
+    ETHUK14 = c(
+      "1" = "white",
+      "2" = "mixed", "3" = "mixed", "4" = "mixed",
+      "5" = "asian", "6" = "asian", "7" = "asian", "8" = "asian",
+      "10" = "asian",
+      "9" = "chinese",
+      "11" = "black", "12" = "black", "13" = "black",
+      "14" = "other"
+    ),
+    ETHUK8 = c(
+      "1" = "white", "2" = "mixed", "3" = "asian", "4" = "asian",
+      "5" = "asian", "6" = "chinese", "7" = "black", "8" = "other"
     )
-  } else {
-    c(
-      "1" = "white", "2" = "mixed", "3" = "asian", "4" = "black",
-      "5" = "chinese", "6" = "other"
-    )
+  )
+  if (length(origin) != 1L || is.na(origin) || !origin %in% names(luts)) {
+    stop(file, ": unrecognised ethnicity source ", origin, call. = FALSE)
   }
+  lut <- luts[[origin]]
   group <- rep(NA_character_, length(code))
   known <- !is.na(code)
   if (!any(known)) return(group)
@@ -554,17 +581,47 @@ eu_cryox7_codes <- c(
 
 uk_cryox7_codes <- 921:926
 
-# "UK", "EU", "non-EU", or NA. CRYOX7 where the end-user file still has
-# it (through 2017 Q2). From 2017 Q3 the file has CRYOX7_EUL_Main instead:
-# 1 UK, 2 EU, 3-5 non-EU.
-birth_group <- function(lfs) {
+# CRYOX is the 2006 country-of-birth list (1 = UK/GB). The EU codes are
+# the EU28 excluding the UK where this list has its own code. Cyprus is
+# a single code, so it is included with Cyprus (European Union) on
+# CRYOX7. Former Czechoslovakia (27), the former USSR (31), and former
+# Yugoslavia (24) stay non-EU: Czechia, Slovakia, the Baltic states,
+# Slovenia, and Croatia are not separated, and CRYOX7 leaves those
+# predecessor states out of the EU set. Codes 1–103 are the whole list.
+uk_cryox_codes <- 1
+eu_cryox_codes <- c(
+  2:12, 14, 15, 17, 19, 21, 26, 28, 29, 30
+)
+cryox_codes <- 1:103
+
+# "UK", "EU", "non-EU", or NA. CRYOX in 2006, then CRYOX7 through 2017 Q2.
+# From 2017 Q3 the file has CRYOX7_EUL_Main instead: 1 UK, 2 EU, 3-5 non-EU.
+birth_group <- function(lfs, file) {
   group <- rep(NA_character_, nrow(lfs))
   if ("BIRTH_CODE" %in% names(lfs)) {
     code <- lfs$BIRTH_CODE
     known <- !is.na(code)
-    group[known & code %in% uk_cryox7_codes] <- "UK"
-    group[known & code %in% eu_cryox7_codes] <- "EU"
-    group[known & !code %in% c(uk_cryox7_codes, eu_cryox7_codes)] <- "non-EU"
+    origin <- source_of(lfs, "BIRTH_CODE")
+    if (identical(origin, "CRYOX")) {
+      bad <- unique(code[known & !code %in% cryox_codes])
+      if (length(bad) > 0L) {
+        stop(
+          file, ": CRYOX codes outside 1-103: ",
+          paste(bad, collapse = ", "),
+          call. = FALSE
+        )
+      }
+      uk <- uk_cryox_codes
+      eu <- eu_cryox_codes
+    } else if (identical(origin, "CRYOX7")) {
+      uk <- uk_cryox7_codes
+      eu <- eu_cryox7_codes
+    } else {
+      stop(file, ": unrecognised birthplace source ", origin, call. = FALSE)
+    }
+    group[known & code %in% uk] <- "UK"
+    group[known & code %in% eu] <- "EU"
+    group[known & !code %in% c(uk, eu)] <- "non-EU"
   } else if ("BIRTH_MAIN" %in% names(lfs)) {
     code <- lfs$BIRTH_MAIN
     known <- !is.na(code)
@@ -576,10 +633,10 @@ birth_group <- function(lfs) {
 }
 
 # TRUE when known to be UK-born, FALSE when known not to be, NA when unknown.
-# birth_group covers vintages with CRYOX7 or CRYOX7_EUL_Main. BIRTH12 is
-# only the fallback before those exist. From 2007, CRY01 and CRY12 code
-# the UK as 921-926. The four 2006 files code it as 1-5. Republic of
-# Ireland is 6 in 2006 and 372 later.
+# birth_group covers CRYOX, CRYOX7, and CRYOX7_EUL_Main. BIRTH12 is only
+# the fallback before those exist. From 2007, CRY01 and CRY12 code the UK
+# as 921-926. The four 2006 files code it as 1-5. Republic of Ireland is
+# 6 in 2006 and 372 later.
 uk_born_flag <- function(lfs, file) {
   if ("birth3" %in% names(lfs) && any(!is.na(lfs$birth3))) {
     return(lfs$birth3 == "UK")
@@ -603,14 +660,16 @@ add_derived <- function(lfs, file) {
   }
   if ("ETHNICITY" %in% names(lfs)) {
     origin <- source_of(lfs, "ETHNICITY")
-    if (is.na(origin) || !origin %in% c("ETHUKEUL", "ETHCEN6", "ETH01")) {
+    if (is.na(origin) || !origin %in% c(
+      "ETHUKEUL", "ETHCEN6", "ETH01", "ETHUK14", "ETHUK8"
+    )) {
       stop(file, ": unrecognised ethnicity source ", origin, call. = FALSE)
     }
     lfs$eth6 <- ethnicity_group(lfs$ETHNICITY, origin, file)
   } else {
     lfs$eth6 <- rep(NA_character_, nrow(lfs))
   }
-  lfs$birth3 <- birth_group(lfs)
+  lfs$birth3 <- birth_group(lfs, file)
   lfs$not_uk <- !uk_born_flag(lfs, file)
   lfs
 }
@@ -659,22 +718,37 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
     !is.na(iw) & iw > 0
   log_hourpay <- rep(NA_real_, length(hourpay))
   log_hourpay[pay %in% TRUE] <- log(hourpay[pay %in% TRUE])
-  uk_born_pay <- pay & df$birth3 == "UK"
+  # UK-born composition uses the same birth3 group as the UK-born wage splits.
+  # Unknown birthplace stays out of the denominator.
+  uk_born <- df$birth3 == "UK"
+  uk_born_pay <- pay & uk_born
   foreign_born_pay <- pay & df$birth3 != "UK"
   eu_born_pay <- pay & df$birth3 == "EU"
   non_eu_born_pay <- pay & df$birth3 == "non-EU"
 
-  eth_detail <- if (identical(eth_origin, "ETHUKEUL")) {
-    share_columns(col(df, "ETHNICITY"), w, c(
-      share_eth_indian = 3,
-      share_eth_pakistani = 4,
-      share_eth_bangladeshi = 5
-    ))
+  # Separate Indian, Pakistani, and Bangladeshi codes. ETHCEN6 and ETH01
+  # have one Asian category, so those three shares stay missing there.
+  detail_codes <- list(
+    ETHUKEUL = c(share_eth_indian = 3, share_eth_pakistani = 4, share_eth_bangladeshi = 5),
+    ETHUK14 = c(share_eth_indian = 6, share_eth_pakistani = 7, share_eth_bangladeshi = 8),
+    ETHUK8 = c(share_eth_indian = 3, share_eth_pakistani = 4, share_eth_bangladeshi = 5)
+  )
+  eth_detail <- if (!is.na(eth_origin) && eth_origin %in% names(detail_codes)) {
+    codes <- detail_codes[[eth_origin]]
+    c(
+      share_columns(col(df, "ETHNICITY"), w, codes),
+      share_columns(
+        col(df, "ETHNICITY"), w, with_suffix(codes, "_uk_born"), among = uk_born
+      )
+    )
   } else {
     list(
       share_eth_indian = NA_real_,
       share_eth_pakistani = NA_real_,
-      share_eth_bangladeshi = NA_real_
+      share_eth_bangladeshi = NA_real_,
+      share_eth_indian_uk_born = NA_real_,
+      share_eth_pakistani_uk_born = NA_real_,
+      share_eth_bangladeshi_uk_born = NA_real_
     )
   }
 
@@ -689,6 +763,7 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
       n = as.integer(sum(person)),
       pop = sum(w[person]),
       mean_age = wmean(col(df, "AGE"), w),
+      mean_age_uk_born = wmean(col(df, "AGE"), w, among = uk_born),
       median_age = wmedian(col(df, "AGE"), w),
       share_female = wshare(col(df, "SEX_LABEL"), w, "Female"),
       emp_rate = wshare(activity, w, "In employment", among = known_status),
@@ -727,9 +802,14 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
     share_columns(col(df, "SECTOR_LABEL"), w, sector_shares, among = employee),
     share_columns(col(df, "MANAGER_LABEL"), w, manager_shares, among = in_emp),
     share_columns(col(df, "QUALGRP_LABEL"), w, qual_shares),
+    share_columns(
+      col(df, "QUALGRP_LABEL"), w, with_suffix(qual_shares, "_uk_born"),
+      among = uk_born
+    ),
     list(occ_scheme = occ_scheme),
     occ_stats,
     share_columns(col(df, "eth6"), w, eth_shares),
+    share_columns(col(df, "eth6"), w, with_suffix(eth_shares, "_uk_born"), among = uk_born),
     eth_detail,
     share_columns(col(df, "birth3"), w, birth_shares),
     list(

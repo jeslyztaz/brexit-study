@@ -1,0 +1,15 @@
+---
+title: "test regressions"
+output: html_document
+date: "2026-10-22"
+---
+
+## Setup
+
+```{r setup, message=FALSE, warning=FALSE}
+library(here)
+source(here("setup.R"))
+source(here("functions", "data_cleaners.R"))
+source(here("functions", "lfs_panel.R"))
+
+```

@@ -8,10 +8,10 @@ source(here("functions", "lfs_panel.R"))
 
 panel <- build_residence_quarter_panel(
   here("data", "quarterly_lfs_raw"),
-  from_year = 2014L
+  from_year = 2006L
 )
 
-out <- here("data", "processed", "residence_quarter_panel.csv")
+out <- here("data", "processed", "residence_quarter_panel_full.csv")
 dir.create(dirname(out), recursive = TRUE, showWarnings = FALSE)
 readr::write_csv(panel, out)
 message("Wrote ", nrow(panel), " rows to ", out)

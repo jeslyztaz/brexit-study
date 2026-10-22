@@ -5,6 +5,8 @@
 #
 # lfs_cs_candidates is also how the panel reader decides which columns
 # to load. Within each entry the first name present in the file wins.
+# shrink_lfs_cs() skips that name when every value is a missing code
+# and a later name in the same table has a real value.
 
 lfs_cs_candidates <- list(
   CASEID = "CASENOP",
@@ -29,9 +31,9 @@ lfs_cs_candidates <- list(
   NRTHIRISH = c("NATIDNI", "NATIDI"),
   ENGLISH = c("NATIDE11", "NATIDE"),
   BRITISH = c("NATIDB11", "NATIDB"),
-  ETHNICITY = c("ETHUKEUL", "ETHCEN6", "ETH01"),
+  ETHNICITY = c("ETHUKEUL", "ETHCEN6", "ETH01", "ETHUK14", "ETHUK8"),
   MAXQUALI = c("HIQUAL22", "HIQUAL15", "HIQUAL11", "HIQUAL8"),
-  QUALGRP = c("HIQUL22D", "HIQUL15D", "HIQUL11D", "HIQUAL8D"),
+  QUALGRP = c("HIQUL22D", "HIQUL15D", "HIQUL11D", "HIQUAL8D", "HIQUAL5D"),
   RESIDENCE = "URESMC",
   REGION = "GOVTOF2",
   OCCUPATION = c("SOC20M", "SOC10M", "SOC2KM"),
@@ -39,7 +41,7 @@ lfs_cs_candidates <- list(
   PUBLICR = "PUBLICR",
   SECTOR = "SECTOR",
   MANAGER = "MANAGER",
-  BIRTH_CODE = "CRYOX7",
+  BIRTH_CODE = c("CRYOX7", "CRYOX"),
   BIRTH_MAIN = "CRYOX7_EUL_Main",
   BIRTH_SUB = "CRYOX7_EUL_Sub",
   BIRTH12 = c("CRY12", "CRY01"),
@@ -53,9 +55,18 @@ lfs_cs_candidate_columns <- function() {
 }
 
 shrink_lfs_cs <- function(data, weight = NULL) {
+  # -9, -8, and -6 are non-response. 2011 Q1 still carries ETHCEN6, but
+  # every value is -8; ETHUK14 in that file is filled.
+  has_values <- function(nm) {
+    x <- data[[nm]]
+    if (is.character(x)) x <- suppressWarnings(as.numeric(trimws(x)))
+    any(!is.na(x) & !x %in% c(-9, -8, -6))
+  }
   choose <- function(candidates) {
     hit <- candidates[candidates %in% names(data)]
-    if (length(hit) == 0) NA_character_ else hit[[1]]
+    if (length(hit) == 0) return(NA_character_)
+    usable <- hit[vapply(hit, has_values, logical(1))]
+    if (length(usable) == 0) hit[[1]] else usable[[1]]
   }
 
   if (is.null(weight)) {
@@ -225,13 +236,33 @@ decode_lfs_cs <- function(lfs) {
           "White", "Mixed", "Asian or Asian British",
           "Black or Black British", "Chinese", "Other ethnic group"
         )
+      ),
+      ETHUK14 = list(
+        levels = 1:14,
+        labels = c(
+          "White", "White and Black Caribbean", "White and Black African",
+          "White and Asian", "Asian/Asian British", "Indian", "Pakistani",
+          "Bangladeshi", "Chinese", "Any other Asian background", "African",
+          "Caribbean", "Any other Black/African/Caribbean background",
+          "Any other ethnic group (includes Gypsy, Traveller or Irish Traveller)"
+        )
+      ),
+      ETHUK8 = list(
+        levels = 1:8,
+        labels = c(
+          "White", "Mixed/Multiple ethnic groups", "Indian", "Pakistani",
+          "Bangladeshi", "Chinese", "Black/African/Caribbean/Black British",
+          "Other ethnic group"
+        )
       )
     )) %>%
     label_from_source("QUALGRP", "QUALGRP_LABEL", list(
       HIQUL22D = list(levels = qual_levels, labels = qual_labels),
       HIQUL15D = list(levels = qual_levels, labels = qual_labels),
       HIQUL11D = list(levels = qual_levels, labels = qual_labels),
-      HIQUAL8D = list(levels = qual_levels, labels = qual_labels)
+      HIQUAL8D = list(levels = qual_levels, labels = qual_labels),
+      # 2006–2007. Same 1–7 groups; the dictionary text is shorter.
+      HIQUAL5D = list(levels = qual_levels, labels = qual_labels)
     )) %>%
     label_from_source("OCCUGRP", "OCCUGRP_LABEL", list(
       SC20MMJ = list(levels = 1:9, labels = soc2010_labels),

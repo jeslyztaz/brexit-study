@@ -9,23 +9,23 @@ source("setup.R")
 # ----------------------------------
 # 1. Data preparation
 # ----------------------------------
-source("scripts/01_import_clean.R")
-source("scripts/02_construct_variables.R")
+source("pipeline/01_prep_data.R")
+source("pipeline/02_construct_variables.R")
 
 # ----------------------------------
 # 2. Exploratory analysis
 # ----------------------------------
-source("scripts/03_descriptive_analysis.R")
+source("pipeline/03_descriptive_analysis.R")
 
 # ----------------------------------
 # 3. Econometric analysis
 # ----------------------------------
-source("scripts/04_main_regressions.R")
-source("scripts/05_robustness.R")
+source("pipeline/04_main_regressions.R")
+source("pipeline/05_robustness.R")
 
 # ----------------------------------
 # 4. Export results
 # ----------------------------------
-source("scripts/06_export_results.R")
+source("pipeline/06_export_results.R")
 
 message("EC4362 analysis completed successfully.")

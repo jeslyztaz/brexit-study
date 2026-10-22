@@ -1,0 +1,138 @@
+# Residence-quarter regression data
+
+`data/processed/residence_quarter_regression.csv` is the file to load into a regression. `pipeline/02_construct_variables.R` builds it from `data/processed/residence_quarter_panel_full.csv`. Those formulas are in `functions/construct_variables.R`. `pipeline/01_prep_data.R` builds the panel from the quarterly person files in `data/quarterly_lfs_raw`. The person-level recodes are in `functions/data_cleaners.R` and `functions/lfs_panel.R`.
+
+One row is one URESMC residence area in one calendar quarter. Ages are 16–64. The current full panel, and therefore this file, runs from 2006 Q1 through 2026 Q2, twenty areas. No rows are dropped for the sample. A change is missing when the earlier quarter is not in the file.
+
+## Person records
+
+Each person file is one calendar quarter. The quarter comes from the filename: `jm` is Q1, `aj` is Q2, `js` is Q3, and `od` is Q4. The two-digit year in the filename is 19xx when it is 92 or above, and 20xx when it is below 92. Everyone in the file is given that year and quarter.
+
+`REFWKY` is the reference year and `REFWKM` is the reference month. They check the filename quarter. The modal `REFWKY` has to be unique and equal the filename year. At least 80% of non-missing `REFWKM` values have to fall in that quarter's months: Q1 is January–March, Q2 April–June, Q3 July–September, and Q4 October–December. A person whose reference month sits outside those three months stays in the file's quarter.
+
+Each quarter from 2006 Q1 through 2026 Q2 has one person file in that folder. If two files shared a quarter, the file with the higher `PWT` number would be kept. If those numbers were equal, the file with the higher UKDA study number in the `UKDA-*-tab` folder name would be kept.
+
+A person is kept when `AGE` is from 16 to 64. A missing age is left out. `URESMC` codes 1–20 are the residence names, in order: Tyne & Wear, Rest of Northern region, South Yorkshire, West Yorkshire, Rest of Yorks & Humberside, East Midlands, East Anglia, Inner London, Outer London, Rest of South East, South West, West Midlands (met county), Rest of West Midlands, Greater Manchester, Merseyside, Rest of North West, Wales, Strathclyde, Rest of Scotland, Northern Ireland. A person aged 16–64 with a missing `URESMC` is left out. Each quarter still has one row for every area. An area with no positive person weight has `pop` of 0.
+
+On the numeric columns that are read, -9, -8, and -6 are set to missing before any total, share, or mean. Those three codes are non-response.
+
+The person weight is the `PWT` column with the highest number. The income weight is the `PIWT` column with the highest number. In this build those columns are `PWT14` and `PIWT14` from 2006 Q1 through 2011 Q2, `PWT18` and `PIWT18` from 2011 Q3 through 2018 Q4, `PWT24` and `PIWT18` in 2019, `PWT24` and `PIWT22` from 2020 Q1 through 2023 Q3, `PWT24` and `PIWT23` from 2023 Q4 through 2024 Q3, and `PWT24` and `PIWT24` from 2024 Q4. A weight is used only when it is non-missing and above 0. Birthplace, qualification, ethnicity, age, and `pop` use the person weight. Pay uses the income weight.
+
+Birthplace, qualification, and ethnicity change column name across vintages. For each of those, the quarter uses the first listed name that is on the file and has at least one value other than -9, -8, and -6. If every present name is only those codes, the first present name is kept.
+
+A share is the total weight of people in the category divided by the total weight of people in its denominator. A person is in the denominator when the weight is above 0, the classified value is non-missing, and any further restriction for that share is met. A missing value is in neither part. A mean is the weighted average on the same basis. With nobody in the denominator, the share or mean is missing.
+
+`pop` is the sum of the person weights in the area. A missing birthplace stays inside `pop`.
+
+## Birthplace
+
+Birthplace is UK, EU, or non-EU. Unknown birthplace is in neither group. The country column is `CRYOX7`, then `CRYOX`, by the name rule above. `CRYOX7_EUL_Main` is used when neither country column is kept. In these files, `CRYOX` is the 2006 column, `CRYOX7` is the column from 2007 Q1 through 2017 Q2, and `CRYOX7_EUL_Main` is the column from 2017 Q3.
+
+On `CRYOX7_EUL_Main`, 1 is UK, 2 is EU, and 3–5 are non-EU. Those three non-UK codes are Other Europe, Asia, and Rest of the World.
+
+On `CRYOX`, code 1 is UK. EU is codes 2–12, 14, 15, 17, 19, 21, 26, 28, 29, and 30. Any other code from 1 to 103 is non-EU. This EU set is the EU28 excluding the UK where the 2006 list has its own code. Cyprus is a single code on that list and is inside the EU set. Former Czechoslovakia is 27, the former USSR is 31, and former Yugoslavia is 24, and all three are non-EU. Czechia, Slovakia, the Baltic states, Slovenia, and Croatia are not separate codes on `CRYOX`, so a person recorded under one of those predecessor states is non-EU.
+
+On `CRYOX7`, codes 921–926 are UK. On `CRY12`, that range includes 921 England, 922 Northern Ireland, 923 Scotland, 924 Wales, and 926 UK, Britain (did not know country); 925 is inside the UK range as well. EU is the EU28 excluding the UK, plus the list's own Cyprus and Spain codes: Austria 40, Belgium 56, Bulgaria 100, Croatia 191, Cyprus 196, Czechia 203, Denmark 208, Estonia 233, Finland 246, France 250, Germany 276, Greece 300, Hungary 348, Republic of Ireland 372, Italy 380, Latvia 428, Lithuania 440, Luxembourg 442, Malta 470, the Netherlands 528, Poland 616, Portugal 620, Romania 642, Slovakia 703, Slovenia 705, Spain 724, Sweden 752, Cyprus (European Union) 901, Cyprus not otherwise specified 903, and Spain 911, 912, and 913. Any other non-missing code is non-EU. That includes Cyprus (non-European Union) 902, Czechoslovakia 971, the USSR 972, and Yugoslavia 973.
+
+`share_birth_uk`, `share_birth_eu`, and `share_birth_non_eu` are person-weighted shares among residents with a known birthplace and a positive person weight.
+
+## Qualification
+
+The qualification column is the first usable name among `HIQUL22D`, `HIQUL15D`, `HIQUL11D`, `HIQUAL8D`, and `HIQUAL5D`. On these files that is `HIQUAL5D` from 2006 Q1 through 2007 Q4, `HIQUAL8D` from 2008 Q1 through 2010 Q4, `HIQUL11D` from 2011 Q1 through 2014 Q4, `HIQUL15D` from 2015 Q1 through 2021 Q4, and `HIQUL22D` from 2022 Q1. All five are read as codes 1–7 with the same groups. The printed dictionary text on `HIQUAL5D` is shorter; the codes are still these groups:
+
+1. Degree or equivalent
+2. Higher education
+3. GCE A level or equivalent
+4. GCSE grades A*-C or equivalent
+5. Other qualifications
+6. No qualification
+7. Don't know
+
+The panel's qualification shares are person-weighted. Code 7 is a classified value, so "Don't know" is in the denominator and the seven shares sum to 1. A qualification left missing by -9, -8, or -6 is outside that denominator. The UK-born shares use the same codes and the same person weight, and they also require a UK birthplace from the grouping above. The regression then drops "Don't know" from its own denominator. That step is under UK-born controls.
+
+## Ethnicity
+
+The ethnicity column is the first usable name among `ETHUKEUL`, `ETHCEN6`, `ETH01`, `ETHUK14`, and `ETHUK8`. A column that is present but filled only with -9, -8, or -6 is skipped, and the next name with a real value is used. From 2006 Q1 through 2010 Q4 the column used is `ETHCEN6`. `ETH01` is also on those files; `ETHCEN6` is earlier in the list and is the one kept. 2011 Q1 uses `ETHUK14`. On that file `ETHCEN6` has no value other than -9, -8, or -6, and `ETHUK8` is filled but comes later in the list. From 2011 Q2 the column is `ETHUKEUL`. Each code is placed in one of six groups: white, mixed, Asian, Chinese, black, or other. Chinese stays out of Asian.
+
+`ETHCEN6`: 1 white, 2 mixed, 3 Asian or Asian British, 4 black or Black British, 5 Chinese, 6 other.
+
+`ETH01`: 1 white, 2 mixed, 3 Asian or Asian British, 4 black or Black British, 5 Chinese, 6 other ethnic group.
+
+`ETHUKEUL`: 1 white, 2 mixed, 3 Indian, 4 Pakistani, 5 Bangladeshi, 6 Chinese, 7 any other Asian background, 8 black, 9 other. Codes 3, 4, 5, and 7 are Asian.
+
+`ETHUK8`: 1 white, 2 mixed, 3 Indian, 4 Pakistani, 5 Bangladeshi, 6 Chinese, 7 black, 8 other. Codes 3, 4, and 5 are Asian.
+
+`ETHUK14`: 1 white. Codes 2–4 are mixed: White and Black Caribbean, White and Black African, and White and Asian. Codes 5, 6, 7, 8, and 10 are Asian: Asian or Asian British, Indian, Pakistani, Bangladeshi, and any other Asian background. Code 9 is Chinese. Codes 11–13 are black: African, Caribbean, and any other Black background. Code 14 is other: any other ethnic group, which on this list includes Gypsy, Traveller or Irish Traveller.
+
+On `ETHCEN6` and `ETH01`, Asian is the single Asian or Asian British code. On the other three columns, Asian is the sum of the Indian, Pakistani, Bangladeshi, and other-Asian codes, and on `ETHUK14` it also includes code 5.
+
+The panel's six ethnicity shares are person-weighted among residents with a known group, and they sum to 1. The UK-born shares use the same groups and also require a UK birthplace. The regression columns that keep Asian, black, Chinese, and mixed plus other are under UK-born controls.
+
+## Keys
+
+`residence` is the URESMC area name from the list above. `year` and `quarter` are the filename year and quarter. `period` is those two pasted together, such as `2016Q1`, for a quarter fixed effect.
+
+## Counts
+
+`pop` on the panel is the sum of the person weights of residents aged 16–64, including people whose birthplace is missing. Each birth share is the person-weighted share among residents with a known birthplace and a positive person weight.
+
+`native` = `pop` × `share_birth_uk`. `eu` = `pop` × `share_birth_eu`. `non_eu` = `pop` × `share_birth_non_eu`. `migrant` = `eu` + `non_eu`. An area with `pop` of 0 and a missing share is stored as a count of 0. A positive `pop` with a missing share stays missing. Because `pop` includes missing birthplace and the share does not, the count equals the weighted group total only when birthplace is known for everyone in `pop`.
+
+## Ratios
+
+`ratio_migrant` = `migrant` / `native`. `ratio_eu` = `eu` / `native`. `ratio_non_eu` = `non_eu` / `native`. The ratio is missing when `native` is missing or not positive. `pop` cancels, so `ratio_migrant` = (`share_birth_eu` + `share_birth_non_eu`) / `share_birth_uk` whenever `pop` is positive.
+
+`national_ratio_migrant`, `national_ratio_eu`, and `national_ratio_non_eu` use the same formulas on the sums of the area counts in that quarter. They are not the average of the area ratios.
+
+## Changes
+
+A quarter-to-quarter change, `d_qoq_`, is the column in this quarter minus the same column one quarter earlier. A year-on-year change, `d_yoy_`, subtracts the value four quarters earlier. The earlier quarter is the calendar quarter, not the previous row. If that quarter is absent, the change is missing.
+
+Area columns are matched within `residence`. National columns are matched on the calendar only, so every area in a quarter gets the same national change.
+
+`d_qoq_ratio_migrant`, `d_qoq_ratio_eu`, `d_qoq_ratio_non_eu`
+`d_yoy_ratio_migrant`, `d_yoy_ratio_eu`, `d_yoy_ratio_non_eu`
+`d_qoq_national_ratio_migrant`, `d_qoq_national_ratio_eu`, `d_qoq_national_ratio_non_eu`
+`d_yoy_national_ratio_migrant`, `d_yoy_national_ratio_eu`, `d_yoy_national_ratio_non_eu`
+`d_qoq_mean_log_hourpay`, `d_qoq_mean_log_hourpay_uk_born`
+`d_yoy_mean_log_hourpay`, `d_yoy_mean_log_hourpay_uk_born`
+
+`d_yoy_ratio_migrant_l4`, `d_yoy_ratio_eu_l4`, and `d_yoy_ratio_non_eu_l4` are the year-on-year ratio changes dated four quarters earlier. In quarter *t* that is the ratio at *t*−4 minus the ratio at *t*−8.
+
+## Baselines
+
+The baseline window is 2010 Q1 through 2015 Q4 inclusive. A quarter in that window is used only when `native`, `eu`, and `non_eu` are all finite.
+
+`baseline_ratio_migrant` = sum of `migrant` / sum of `native` over that window, inside the residence. `baseline_ratio_eu` and `baseline_ratio_non_eu` use `eu` and `non_eu` as the numerator. This is the pooled stock, not the average of the quarterly ratios. The same value is written on every quarter for that residence, including quarters outside 2010–2015.
+
+`baseline_national_ratio_migrant`, `baseline_national_ratio_eu`, and `baseline_national_ratio_non_eu` are the same pooled ratios with the sums taken over all twenty areas. Each one is a single number, repeated on every row.
+
+## Wages
+
+`mean_log_hourpay` is copied from the panel. It is the income-weighted mean of log(`HOURPAY`) among people with `STATR` equal to 1, employee, `HOURPAY` above 0, and a positive income weight. `STATR` 2 is self-employed, 3 is a government scheme, and 4 is an unpaid family worker. The log is the natural log. This is the mean of the log, not the log of the mean.
+
+`mean_log_hourpay_uk_born` is the same mean among employees who are also UK-born. Unknown birthplace is left out.
+
+## Shift-share
+
+For each area and quarter, the leave-one-out national ratio keeps every area except that one. For migrants it is (national migrant count − the area's `migrant`) / (national native count − the area's `native`). EU and non-EU use their own numerators and the same native denominator. The national counts are the sums of the area counts.
+
+`shift_share_qoq_migrant` = `baseline_ratio_migrant` × the quarter-to-quarter change in that leave-one-out migrant ratio. `shift_share_yoy_migrant` uses the year-on-year change. The EU columns use `baseline_ratio_eu` and the leave-one-out EU ratio. The non-EU columns use `baseline_ratio_non_eu` and the leave-one-out non-EU ratio.
+
+`shift_share_qoq_eu`, `shift_share_qoq_non_eu`, `shift_share_yoy_eu`, `shift_share_yoy_non_eu`
+
+`shift_share_yoy_migrant_l4`, `shift_share_yoy_eu_l4`, and `shift_share_yoy_non_eu_l4` are those year-on-year shift-shares dated four quarters earlier. The leave-one-out ratios themselves are not in the file.
+
+## UK-born controls
+
+These are contemporaneous. They are person-weighted, ages 16–64, and restricted to UK-born residents. Unknown birthplace is not in the denominator.
+
+`mean_age_uk_born` is copied from the panel: the person-weighted mean of `AGE` among UK-born residents in the 16–64 sample. `AGE` is not recoded inside that range.
+
+The qualification controls start from the panel's UK-born qualification shares, built from codes 1–7 above. Those shares are among UK-born residents with a non-missing qualification, so "Don't know" is inside their denominator and the seven shares sum to 1. `share_uk_degree` divides the degree share by the sum of the shares for degree, higher education, A-level, GCSE, other qualifications, and no qualification. "Don't know" is left out of that sum, which puts it out of the denominator. The degree label is "Degree or equivalent".
+
+`share_uk_low_qual` uses the same denominator. Its numerator is the sum of "GCSE grades A*-C or equivalent", "Other qualifications", and "No qualification". Higher education and A-level are not columns.
+
+The ethnicity controls start from the panel's six UK-born ethnicity shares. The UKDA codes behind those groups are listed under Ethnicity. Those shares are among UK-born residents with a known ethnicity group, and they sum to 1. Chinese is kept out of Asian. Where the LFS lists them separately, Asian is Indian, Pakistani, Bangladeshi, and other Asian, and on `ETHUK14` it also includes the Asian or Asian British code.
+
+`share_uk_asian`, `share_uk_black`, and `share_uk_chinese` divide the matching panel share by the sum of the six ethnicity shares. When that sum is 1, each equals the panel share. `share_uk_eth_other` divides the sum of the mixed share and the residual other share by the same total. White is not a column.
