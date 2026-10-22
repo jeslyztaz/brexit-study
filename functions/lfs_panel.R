@@ -248,25 +248,35 @@ highest_numbered_column <- function(nms, prefix) {
 # Columns the residence-quarter panel actually aggregates. The first name
 # present in the file wins, same rule as shrink_lfs_cs(). Every ethnicity
 # candidate on the file is loaded, so that rule can skip one that is
-# entirely missing and use a later name.
+# entirely missing and use a later name. Every birthplace candidate is
+# loaded for the same reason. shrink_lfs_cs() then keeps one country
+# column; it does not fill individual missing rows from a later column.
 panel_keep <- c(
   "YEAR", "MONTH", "SEX", "AGE", "HOURPAY", "HRRATE", "SAMEGROSS",
   "USUALHRS", "ACTUALHRS", "WRKING", "STATR", "UNDEMP", "ACTIVITY",
   "WELSH", "SCOTTISH", "OTHERS", "NRTHIRISH", "ENGLISH", "BRITISH",
   "ETHNICITY", "QUALGRP", "RESIDENCE", "OCCUGRP", "PUBLICR", "SECTOR",
-  "MANAGER", "BIRTH_CODE", "BIRTH_MAIN", "BIRTH12",
+  "MANAGER", "BIRTH_CODE", "BIRTH_MAIN", "BIRTH_DETAIL", "BIRTH12",
   "ARRIVAL_FIRST", "ARRIVAL_LAST"
 )
 
 panel_source_columns <- function(header, pwt_name, piwt_name) {
-  chosen <- vapply(panel_keep, function(nm) {
+  first_only <- setdiff(
+    panel_keep, c("BIRTH_CODE", "BIRTH_MAIN", "BIRTH_DETAIL", "BIRTH12")
+  )
+  chosen <- vapply(first_only, function(nm) {
     candidates <- lfs_cs_candidates[[nm]]
     hit <- candidates[candidates %in% header]
     if (length(hit) == 0L) NA_character_ else hit[[1]]
   }, character(1))
   ethnicity <- lfs_cs_candidates$ETHNICITY
   ethnicity <- ethnicity[ethnicity %in% header]
-  unique(c(pwt_name, piwt_name, chosen[!is.na(chosen)], ethnicity))
+  birth <- unlist(
+    lfs_cs_candidates[c("BIRTH_CODE", "BIRTH_MAIN", "BIRTH_DETAIL", "BIRTH12")],
+    use.names = FALSE
+  )
+  birth <- birth[birth %in% header]
+  unique(c(pwt_name, piwt_name, chosen[!is.na(chosen)], ethnicity, birth))
 }
 
 # Calendar-quarter person files only. Two files for the same quarter: keep
@@ -615,42 +625,157 @@ ethnicity_group <- function(code, origin, file) {
   group
 }
 
-# EU-born on CRYOX7. This is the EU28 excluding the UK, which is what
-# CRYOX7_EUL_Main value 2 means from 2017 Q3. Croatia is included.
-# Spain is 911/912/913 on this code list, not ISO 724. Cyprus (European
-# Union) is 901 and Cyprus not otherwise specified is 903. Cyprus
-# (non-European Union), 902, is left out. So are Czechoslovakia (971),
-# the USSR (972), and Yugoslavia (973).
+# Fixed EU27-born set on CRYOX7: the EU28 excluding the UK, including
+# Croatia, held fixed across the sample. The codes are the ones
+# CRYOX7_EUL_SUB sends to European Union EU15, EU8, EU2, or EU Other
+# (LFS User Guide Volume 4, 2020, CRYOX7_EUL_SUB). Those four categories
+# are CRYOX7_EUL_Main value 2. ISO 724 and 196 are not CRYOX7 codes.
+# Spain is 911, 912, and 913. Cyprus is 901, 902, and 903.
+#
+# Volume 4 puts Gibraltar (292), Åland (248), Cyprus (non-European Union)
+# (902), Cyprus not otherwise specified (903), and Czechoslovakia not
+# otherwise specified (971) in that EU aggregate. The main variable cannot
+# separate them after 2017 Q2, so the country list uses the same aggregate.
+# 902 is the northern part of Cyprus. 971 is EU because both successor
+# states are in the EU27 and the derived variable files it under EU8.
 eu_cryox7_codes <- c(
-  40, 56, 100, 191, 196, 203, 208, 233, 246, 250, 276, 300, 348, 372,
-  380, 428, 440, 442, 470, 528, 616, 620, 642, 703, 705, 724, 752,
-  901, 903, 911, 912, 913
+  40, 56, 208, 246, 248, 250, 276, 292, 300, 372, 380, 442, 528, 620, 752,
+  911, 912, 913,
+  203, 233, 348, 428, 440, 616, 703, 705, 971,
+  100, 642,
+  191, 470, 901, 902, 903
 )
 
+# 921 England, 922 Northern Ireland, 923 Scotland, 924 Wales,
+# 925 Great Britain not otherwise specified, 926 United Kingdom not
+# otherwise specified. On the end-user CRYOX7 the constituent countries
+# and the crown dependencies are collapsed into 926 (User Guide Volume 3).
+# 926 is therefore UK-born in the same sense as CRYOX7_EUL_Main value 1,
+# which includes the Channel Islands and the Isle of Man. Codes 831, 832,
+# 833, and 931 are those crown dependencies when they are stored
+# separately. They are not in this UK set.
 uk_cryox7_codes <- 921:926
 
-# CRYOX is the 2006 country-of-birth list (1 = UK/GB). The EU codes are
-# the EU28 excluding the UK where this list has its own code. Cyprus is
-# a single code, so it is included with Cyprus (European Union) on
-# CRYOX7. Former Czechoslovakia (27), the former USSR (31), and former
-# Yugoslavia (24) stay non-EU: Czechia, Slovakia, the Baltic states,
-# Slovenia, and Croatia are not separated, and CRYOX7 leaves those
-# predecessor states out of the EU set. Codes 1–103 are the whole list.
+# At sea and in the air are not countries. Volume 4 does not put 991 or
+# 992 in a region, so they stay unclassified rather than non-EU.
+cryox7_unclassified_codes <- c(991, 992)
+
+# Positive labels on CRYOX7 in the 2007–2011 end-user dictionaries, plus
+# codes added in User Guide Volume 3 (2017) and Volume 4 (2020):
+# 531 Curaçao, 534 St Maarten (Dutch part), 535 Bonaire, St Eustatius and
+# Saba, 652 St Barthelemy, 728 South Sudan, 729 Sudan, and 990 Netherlands
+# Antilles not otherwise specified. 736 Sudan stays from the earlier list.
+# A code outside this set stops the build. It is not coded as non-EU.
+cryox7_valid_codes <- c(
+  4, 8, 10, 12, 16, 20, 24, 28, 31, 32, 36, 40, 44, 48, 50, 51, 52, 56, 60,
+  64, 68, 70, 72, 74, 76, 84, 86, 90, 92, 96, 100, 104, 108, 112, 116, 120,
+  124, 132, 136, 140, 144, 148, 152, 156, 158, 162, 166, 170, 174, 175, 178,
+  180, 184, 188, 191, 192, 203, 204, 208, 212, 214, 218, 222, 226, 231, 232,
+  233, 234, 238, 239, 242, 246, 248, 250, 254, 258, 260, 262, 266, 268, 270,
+  275, 276, 288, 292, 296, 300, 304, 308, 312, 316, 320, 324, 328, 332, 334,
+  336, 340, 344, 348, 352, 356, 360, 364, 368, 372, 376, 380, 384, 388, 392,
+  398, 400, 404, 408, 410, 414, 417, 418, 422, 426, 428, 430, 434, 438, 440,
+  442, 446, 450, 454, 458, 462, 466, 470, 474, 478, 480, 484, 492, 496, 498,
+  499, 500, 504, 508, 512, 516, 520, 524, 528, 530, 531, 533, 534, 535, 540,
+  548, 554, 558, 562, 566, 570, 574, 578, 580, 581, 583, 584, 585, 586, 591,
+  598, 600, 604, 608, 612, 616, 620, 624, 626, 630, 634, 638, 642, 643, 646,
+  652, 654, 659, 660, 662, 663, 666, 670, 674, 678, 682, 686, 688, 690, 694,
+  702, 703, 704, 705, 706, 710, 716, 728, 729, 732, 736, 740, 744, 748, 752,
+  756, 760, 762, 764, 768, 772, 776, 780, 784, 788, 792, 795, 796, 798, 800,
+  804, 807, 818, 831, 832, 833, 834, 840, 850, 854, 858, 860, 862, 876, 882,
+  887, 891, 894, 901, 902, 903, 911, 912, 913, 921, 922, 923, 924, 925, 926,
+  931, 951, 971, 972, 973, 974, 981, 982, 983, 984, 985, 986, 987, 988, 989,
+  990, 991, 992
+)
+
+# CRYOX is the 2006 country-of-birth list (1 = UK/GB). Codes 1–103 are the
+# whole list in the 2006 end-user dictionary. The EU codes are the EU27
+# members that list has as their own code, plus the two codes whose
+# CRYOX7 counterparts are inside the Volume 4 EU aggregate: Gibraltar (16,
+# the counterpart of 292) and former Czechoslovakia (27, the counterpart of
+# 971). Both successor states of Czechoslovakia are in the EU27. Cyprus is
+# one code on this list, and Volume 4 puts all three later Cyprus codes in
+# the EU aggregate, so 15 stays in the EU set.
 uk_cryox_codes <- 1
 eu_cryox_codes <- c(
-  2:12, 14, 15, 17, 19, 21, 26, 28, 29, 30
+  2:12, 14, 15, 16, 17, 19, 21, 26, 27, 28, 29, 30
 )
+# Former Yugoslavia (24) mixes Slovenia and Croatia with non-EU successor
+# states, and the 2006 list has no separate codes for them. Former USSR
+# (31) mixes the Baltic states with non-EU republics. At sea / in the air
+# (102) and stateless (103) are not countries. These stay unclassified.
+# They are not added to non-EU. The USSR and Yugoslavia residuals on
+# CRYOX7 (972 and 973) are different: Volume 4 puts those residuals in
+# Other Europe after the EU successor states have their own codes.
+cryox_unclassified_codes <- c(24, 31, 102, 103)
 cryox_codes <- 1:103
 
-# "UK", "EU", "non-EU", or NA. CRYOX in 2006, then CRYOX7 through 2017 Q2.
-# From 2017 Q3 the file has CRYOX7_EUL_Main instead: 1 UK, 2 EU, 3-5 non-EU.
+if (length(intersect(uk_cryox7_codes, eu_cryox7_codes)) > 0L ||
+    length(intersect(eu_cryox7_codes, cryox7_unclassified_codes)) > 0L ||
+    any(!c(uk_cryox7_codes, eu_cryox7_codes, cryox7_unclassified_codes) %in%
+      cryox7_valid_codes)) {
+  stop("CRYOX7 birthplace code lists are inconsistent.", call. = FALSE)
+}
+if (length(intersect(uk_cryox_codes, eu_cryox_codes)) > 0L ||
+    length(intersect(eu_cryox_codes, cryox_unclassified_codes)) > 0L ||
+    any(!c(uk_cryox_codes, eu_cryox_codes, cryox_unclassified_codes) %in% cryox_codes)) {
+  stop("CRYOX birthplace code lists are inconsistent.", call. = FALSE)
+}
+
+assign_birth_group <- function(code, uk, eu, unclassified) {
+  group <- rep(NA_character_, length(code))
+  known <- !is.na(code)
+  group[known & code %in% uk] <- "UK"
+  group[known & code %in% eu] <- "EU"
+  group[known & !code %in% c(uk, eu, unclassified)] <- "non-EU"
+  group
+}
+
+classify_cryox7 <- function(code, file, strict = TRUE) {
+  known <- !is.na(code)
+  bad <- sort(unique(code[known & !code %in% cryox7_valid_codes]))
+  if (length(bad) > 0L) {
+    detail <- paste(bad, collapse = ", ")
+    if (strict) {
+      stop(
+        file, ": CRYOX7 codes with no UKDA label: ", detail,
+        ". They are not classified as non-EU.",
+        call. = FALSE
+      )
+    }
+    warning(
+      file, ": birthplace comparison skipped undocumented codes ", detail, ".",
+      call. = FALSE
+    )
+    code[code %in% bad] <- NA_real_
+  }
+  assign_birth_group(
+    code, uk_cryox7_codes, eu_cryox7_codes, cryox7_unclassified_codes
+  )
+}
+
+# "UK", "EU", "non-EU", or NA. A country column is used only when it has a
+# non-missing value. An all-missing BIRTH_CODE falls through to
+# CRYOX7_EUL_Main. A missing row on the chosen column stays missing: it is
+# not filled from the other column. CRYOX in 2006, CRYOX7 from 2007 Q1
+# through 2017 Q2, and CRYOX7_EUL_Main from 2017 Q3 (1 UK, 2 EU, 3–5 non-EU).
 birth_group <- function(lfs, file) {
+  code_ok <- "BIRTH_CODE" %in% names(lfs) && any(!is.na(lfs$BIRTH_CODE))
+  main_ok <- "BIRTH_MAIN" %in% names(lfs) && any(!is.na(lfs$BIRTH_MAIN))
+  if (!code_ok && !main_ok) {
+    stop(
+      file,
+      ": no usable birthplace classification. Country of birth and CRYOX7_EUL_Main are absent or contain only missing values.",
+      call. = FALSE
+    )
+  }
+
   group <- rep(NA_character_, nrow(lfs))
-  if ("BIRTH_CODE" %in% names(lfs)) {
-    code <- lfs$BIRTH_CODE
-    known <- !is.na(code)
+  if (code_ok) {
     origin <- source_of(lfs, "BIRTH_CODE")
+    code <- lfs$BIRTH_CODE
     if (identical(origin, "CRYOX")) {
+      known <- !is.na(code)
       bad <- unique(code[known & !code %in% cryox_codes])
       if (length(bad) > 0L) {
         stop(
@@ -659,32 +784,138 @@ birth_group <- function(lfs, file) {
           call. = FALSE
         )
       }
-      uk <- uk_cryox_codes
-      eu <- eu_cryox_codes
+      group <- assign_birth_group(
+        code, uk_cryox_codes, eu_cryox_codes, cryox_unclassified_codes
+      )
+      scheme <- "CRYOX country codes"
     } else if (identical(origin, "CRYOX7")) {
-      uk <- uk_cryox7_codes
-      eu <- eu_cryox7_codes
+      group <- classify_cryox7(code, file, strict = TRUE)
+      scheme <- "CRYOX7 country codes aligned to CRYOX7_EUL_SUB"
     } else {
       stop(file, ": unrecognised birthplace source ", origin, call. = FALSE)
     }
-    group[known & code %in% uk] <- "UK"
-    group[known & code %in% eu] <- "EU"
-    group[known & !code %in% c(uk, eu)] <- "non-EU"
-  } else if ("BIRTH_MAIN" %in% names(lfs)) {
+    source <- origin
+  } else {
     code <- lfs$BIRTH_MAIN
     known <- !is.na(code)
+    bad <- unique(code[known & !code %in% 1:5])
+    if (length(bad) > 0L) {
+      stop(
+        file, ": CRYOX7_EUL_Main codes outside 1-5: ",
+        paste(bad, collapse = ", "),
+        call. = FALSE
+      )
+    }
     group[known & code == 1] <- "UK"
     group[known & code == 2] <- "EU"
     group[known & code %in% 3:5] <- "non-EU"
+    source <- "CRYOX7_EUL_Main"
+    scheme <- "CRYOX7_EUL_Main"
   }
-  factor(group, levels = unname(birth_shares))
+
+  group <- factor(group, levels = unname(birth_shares))
+  attr(group, "birthplace_source") <- source
+  attr(group, "birthplace_scheme") <- scheme
+  group
+}
+
+# Crown dependencies collapsed into CRYOX7 code 926. On CRYO7 they keep
+# their own codes, so the two columns disagree by construction.
+cryo7_crown_codes <- c(831, 832, 833, 931)
+
+# Compare the chosen classification with another birthplace column on rows
+# where both source codes are non-missing. Does not replace any values.
+compare_birth_sources <- function(lfs, file) {
+  source <- attr(lfs, "birthplace_source")
+  empty <- list(
+    compared = NA_character_, n = 0L, n_disagree = 0L, n_crown = 0L
+  )
+  if (is.null(source) || length(source) != 1L || is.na(source)) return(empty)
+  primary <- lfs$birth3
+  gaps <- list()
+
+  if (identical(source, "CRYOX7") && "BIRTH_DETAIL" %in% names(lfs)) {
+    detail <- lfs$BIRTH_DETAIL
+    if (any(!is.na(detail))) {
+      other <- classify_cryox7(detail, file, strict = FALSE)
+      both <- !is.na(detail) & !is.na(lfs$BIRTH_CODE)
+      crown <- both & lfs$BIRTH_CODE == 926 & detail %in% cryo7_crown_codes
+      disagree <- both & (
+        is.na(primary) != is.na(other) |
+          (!is.na(primary) & !is.na(other) & as.character(primary) != other)
+      )
+      gaps$CRYO7 <- list(
+        compared = "CRYO7",
+        n = sum(both),
+        n_disagree = sum(disagree),
+        n_crown = sum(crown)
+      )
+    }
+  }
+
+  if (!identical(source, "CRYOX7_EUL_Main") && "BIRTH_MAIN" %in% names(lfs)) {
+    main <- lfs$BIRTH_MAIN
+    if (any(!is.na(main))) {
+      other <- rep(NA_character_, length(main))
+      known <- !is.na(main) & main %in% 1:5
+      other[known & main == 1] <- "UK"
+      other[known & main == 2] <- "EU"
+      other[known & main %in% 3:5] <- "non-EU"
+      both <- !is.na(main) & !is.na(lfs$BIRTH_CODE)
+      disagree <- both & (
+        is.na(primary) != is.na(other) |
+          (!is.na(primary) & !is.na(other) & as.character(primary) != other)
+      )
+      gaps$EUL <- list(
+        compared = "CRYOX7_EUL_Main",
+        n = sum(both),
+        n_disagree = sum(disagree),
+        n_crown = 0L
+      )
+    }
+  }
+
+  reported <- if (!is.null(gaps$CRYO7)) gaps$CRYO7 else if (!is.null(gaps$EUL)) gaps$EUL else empty
+  for (gap in gaps) {
+    message(
+      file, ": birthplace ", source,
+      "; compared with ", gap$compared, " on ", gap$n,
+      " rows, ", gap$n_disagree,
+      if (gap$n_disagree == 1L) " classification disagreement" else " classification disagreements",
+      if (gap$n_crown > 0L) {
+        paste0(
+          " (", gap$n_crown,
+          if (gap$n_crown == 1L) " is a crown dependency" else " are crown dependencies",
+          " collapsed into CRYOX7 926)"
+        )
+      } else {
+        ""
+      },
+      "."
+    )
+    unexpected <- gap$n_disagree - gap$n_crown
+    if (unexpected > 0L) {
+      warning(
+        file, ": ", unexpected, " rows disagree with ", gap$compared,
+        " after the documented crown-dependency collapse. ",
+        source, " is kept for those rows.",
+        call. = FALSE
+      )
+    }
+  }
+  if (length(gaps) == 0L) {
+    message(file, ": birthplace ", source, ".")
+  }
+  reported
 }
 
 # TRUE when known to be UK-born, FALSE when known not to be, NA when unknown.
 # birth_group covers CRYOX, CRYOX7, and CRYOX7_EUL_Main. BIRTH12 is only
-# the fallback before those exist. From 2007, CRY01 and CRY12 code the UK
-# as 921-926. The four 2006 files code it as 1-5. Republic of Ireland is
-# 6 in 2006 and 372 later.
+# the fallback when birth3 is entirely missing. The 2006 CRY01 codes are
+# 1 England, 2 Wales, 3 Scotland, 4 Northern Ireland, and 5 UK, Britain
+# (country not known). From 2007, CRY01 and CRY12 use 921, 922, 923, 924,
+# and 926. Code 925 is not in the CRY12 UK test in the Volume 4 derivation.
+# Republic of Ireland is 6 in 2006 and 372 later, and is not UK-born.
 uk_born_flag <- function(lfs, file) {
   if ("birth3" %in% names(lfs) && any(!is.na(lfs$birth3))) {
     return(lfs$birth3 == "UK")
@@ -717,8 +948,17 @@ add_derived <- function(lfs, file) {
   } else {
     lfs$eth6 <- rep(NA_character_, nrow(lfs))
   }
-  lfs$birth3 <- birth_group(lfs, file)
+  group <- birth_group(lfs, file)
+  # Kept beside the column assignment. A tibble replacement can drop
+  # attributes that were stored on the data frame earlier in this function.
+  birth_source <- attr(group, "birthplace_source")
+  birth_scheme <- attr(group, "birthplace_scheme")
+  lfs$birth3 <- group
   lfs$not_uk <- !uk_born_flag(lfs, file)
+  attr(lfs, "birthplace_source") <- birth_source
+  attr(lfs, "birthplace_scheme") <- birth_scheme
+  # Reports overlap. Does not fill birth3 from the comparison column.
+  attr(lfs, "birth_overlap") <- compare_birth_sources(lfs, file)
   lfs
 }
 
@@ -861,6 +1101,11 @@ residence_stats <- function(df, eth_origin, occ_scheme) {
       median_hourpay_non_eu_born = wmedian(hourpay, iw, among = non_eu_born_pay),
       mean_log_hourpay_non_eu_born = wmean(log_hourpay, iw, among = non_eu_born_pay),
       n_pay = as.integer(sum(pay %in% TRUE)),
+      # Same employee, positive HOURPAY, and positive income-weight rule as
+      # the birthplace-specific log-wage means. Unknown birthplace stays out.
+      n_pay_uk_born = as.integer(sum(uk_born_pay %in% TRUE)),
+      n_pay_eu_born = as.integer(sum(eu_born_pay %in% TRUE)),
+      n_pay_non_eu_born = as.integer(sum(non_eu_born_pay %in% TRUE)),
       pop_pay = sum(iw[pay %in% TRUE]),
       mean_hrrate = wmean(hrrate, iw, among = rate),
       median_hrrate = wmedian(hrrate, iw, among = rate),
@@ -903,6 +1148,17 @@ aggregate_residence_quarter <- function(lfs, info) {
   file <- lfs_source_name(info$path)
   eth_origin <- source_of(lfs, "ETHNICITY")
   occ_scheme <- source_of(lfs, "OCCUGRP")
+  birth_source <- attr(lfs, "birthplace_source")
+  if (is.null(birth_source)) birth_source <- NA_character_
+  birth_scheme <- attr(lfs, "birthplace_scheme")
+  if (is.null(birth_scheme)) birth_scheme <- NA_character_
+  overlap <- attr(lfs, "birth_overlap")
+  if (is.null(overlap)) {
+    overlap <- list(
+      compared = NA_character_, n = NA_integer_,
+      n_disagree = NA_integer_, n_crown = NA_integer_
+    )
+  }
   aged <- lfs[!is.na(lfs$AGE) & lfs$AGE >= 16 & lfs$AGE <= 64, , drop = FALSE]
   n_missing <- sum(is.na(aged$RESIDENCE_LABEL))
   if (n_missing > 0L) {
@@ -925,7 +1181,13 @@ aggregate_residence_quarter <- function(lfs, info) {
         quarter_code = info$quarter_code,
         source_file = file,
         person_weight = info$pwt_name,
-        income_weight = info$piwt_name
+        income_weight = info$piwt_name,
+        birthplace_source = birth_source,
+        birthplace_scheme = birth_scheme,
+        birth_overlap_variable = overlap$compared,
+        birth_overlap_n = overlap$n,
+        birth_overlap_disagree_n = overlap$n_disagree,
+        birth_overlap_crown_n = overlap$n_crown
       ),
       residence_stats(df, eth_origin, occ_scheme)
     )
@@ -943,6 +1205,82 @@ add_covid_info <- function(panel) {
     left_join(covid, by = c("residence", "year")) %>%
     mutate(covid_asmr = replace_na(covid_asmr, 0))
   return(panel_final)
+}
+
+# Cell counts for the UK-born log hourly wage. n_pay_uk_born is the number
+# of employees who enter mean_log_hourpay_uk_born. No cell is dropped here.
+summarise_native_pay_sample <- function(panel) {
+  needed <- c(
+    "residence", "year", "quarter", "n_pay_uk_born", "mean_log_hourpay_uk_born"
+  )
+  missing <- setdiff(needed, names(panel))
+  if (length(missing) > 0L) {
+    stop(
+      "Panel is missing ", paste(missing, collapse = ", "), ".",
+      call. = FALSE
+    )
+  }
+  n <- as.numeric(panel$n_pay_uk_born)
+  wage <- as.numeric(panel$mean_log_hourpay_uk_born)
+  if (any(!is.finite(n) | n < 0)) {
+    stop("n_pay_uk_born must be finite and non-negative.", call. = FALSE)
+  }
+  cells <- length(n)
+  missing_wage <- !is.finite(wage)
+  below <- function(k) sum(n < k)
+  share <- function(k) if (cells == 0L) NA_real_ else below(k) / cells
+  band <- function(flag) sum(missing_wage & flag)
+  message(
+    "UK-born wage sample: ", cells, " residence-quarters. ",
+    "n_pay_uk_born min ", min(n), ", median ", stats::median(n),
+    ", max ", max(n), "."
+  )
+  message(
+    "Cells below 30 / 50 / 100 native wage observations: ",
+    below(30), " (", round(100 * share(30), 1), "%), ",
+    below(50), " (", round(100 * share(50), 1), "%), ",
+    below(100), " (", round(100 * share(100), 1), "%)."
+  )
+  message(
+    "Missing mean_log_hourpay_uk_born by n_pay_uk_born: ",
+    "0 = ", band(n == 0),
+    ", 1-29 = ", band(n > 0 & n < 30),
+    ", 30-49 = ", band(n >= 30 & n < 50),
+    ", 50-99 = ", band(n >= 50 & n < 100),
+    ", 100+ = ", band(n >= 100), "."
+  )
+  if (any(missing_wage & n > 0) || any(!missing_wage & n == 0)) {
+    warning(
+      "mean_log_hourpay_uk_born is not missing on exactly the cells with n_pay_uk_born of 0.",
+      call. = FALSE
+    )
+  }
+  order_n <- order(n, panel$year, panel$quarter, panel$residence)
+  smallest <- panel[order_n, c("residence", "year", "quarter", "n_pay_uk_born")]
+  smallest <- head(smallest, 10L)
+  message("Smallest native wage samples:")
+  message(paste(
+    sprintf(
+      "%s %s Q%s n=%s",
+      smallest$residence, smallest$year, smallest$quarter, smallest$n_pay_uk_born
+    ),
+    collapse = "\n"
+  ))
+  invisible(list(
+    cells = cells,
+    min = min(n),
+    median = stats::median(n),
+    max = max(n),
+    n_below_30 = below(30),
+    n_below_50 = below(50),
+    n_below_100 = below(100),
+    share_below_30 = share(30),
+    share_below_50 = share(50),
+    share_below_100 = share(100),
+    missing_wage_at_zero = band(n == 0),
+    missing_wage_when_positive = band(n > 0),
+    smallest = smallest
+  ))
 }
 
 build_residence_quarter_panel <- function(root, from_year = NULL) {

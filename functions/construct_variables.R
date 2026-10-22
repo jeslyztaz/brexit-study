@@ -46,7 +46,7 @@ construct_variables <- function(panel) {
     "share_birth_uk", "share_birth_eu", "share_birth_non_eu",
     "mean_log_hourpay", "mean_log_hourpay_uk_born"
   )
-  required <- c("residence", "year", "quarter", numeric_cols)
+  required <- c("residence", "year", "quarter", numeric_cols, "n_pay_uk_born")
   missing <- setdiff(required, names(panel))
   if (length(missing) > 0L) {
     stop(
@@ -106,8 +106,15 @@ construct_variables <- function(panel) {
       national_ratio_non_eu = ratio_or_na(national_non_eu, national_native)
     )
 
-  wages <- panel %>%
-    select(residence, year, quarter, mean_log_hourpay, mean_log_hourpay_uk_born)
+  # n_pay_uk_born is the unweighted count behind mean_log_hourpay_uk_born.
+  # It is not a regressor and it does not drop cells. birthplace_source
+  # records the UKDA column used in that quarter.
+  wage_cols_in <- c(
+    "residence", "year", "quarter",
+    "mean_log_hourpay", "mean_log_hourpay_uk_born", "n_pay_uk_born"
+  )
+  extra_wage <- intersect(c("birthplace_source", "birthplace_scheme"), names(panel))
+  wages <- panel %>% select(all_of(c(wage_cols_in, extra_wage)))
 
   out <- local %>%
     left_join(national, by = c("year", "quarter")) %>%

@@ -41,9 +41,17 @@ lfs_cs_candidates <- list(
   PUBLICR = "PUBLICR",
   SECTOR = "SECTOR",
   MANAGER = "MANAGER",
+  # Full-sample country of birth. CRYOX7 is the 2007–2017 Q2 list.
+  # CRYOX is the 2006 list. CRYO is a different 2006 coding frame and is
+  # not a candidate. The first name with a value other than -9, -8, or -6
+  # is kept; a later name is not used to fill individual missing rows.
   BIRTH_CODE = c("CRYOX7", "CRYOX"),
   BIRTH_MAIN = "CRYOX7_EUL_Main",
   BIRTH_SUB = "CRYOX7_EUL_Sub",
+  # Same country codes as CRYOX7, but only filled for a subset of rows,
+  # where UK constituent countries and crown dependencies are separate.
+  # Kept for the overlap check. Not a classification source.
+  BIRTH_DETAIL = "CRYO7",
   BIRTH12 = c("CRY12", "CRY01"),
   ARRIVAL_FIRST = "CAMEYR",
   ARRIVAL_LAST = "CAMEYR2",
@@ -114,6 +122,7 @@ shrink_lfs_cs <- function(data, weight = NULL) {
     BIRTH_CODE = choose(lfs_cs_candidates$BIRTH_CODE),
     BIRTH_MAIN = choose(lfs_cs_candidates$BIRTH_MAIN),
     BIRTH_SUB = choose(lfs_cs_candidates$BIRTH_SUB),
+    BIRTH_DETAIL = choose(lfs_cs_candidates$BIRTH_DETAIL),
     BIRTH12 = choose(lfs_cs_candidates$BIRTH12),
     ARRIVAL_FIRST = choose(lfs_cs_candidates$ARRIVAL_FIRST),
     ARRIVAL_LAST = choose(lfs_cs_candidates$ARRIVAL_LAST),

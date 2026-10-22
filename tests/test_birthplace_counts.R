@@ -223,6 +223,7 @@ panel$share_birth_eu <- panel$pop_eu_born / known
 panel$share_birth_non_eu <- panel$pop_non_eu_born / known
 panel$mean_log_hourpay <- 2.5
 panel$mean_log_hourpay_uk_born <- 2.4
+panel$n_pay_uk_born <- 50L
 panel$mean_age_uk_born <- 40
 panel$share_qual_degree_uk_born <- 0.25
 panel$share_qual_higher_ed_uk_born <- 0.15
@@ -343,5 +344,169 @@ scaled$pop_eu_born <- scaled$pop_eu_born + 10
 scaled$pop <- scaled$pop + 10
 must_stop(construct_variables(scaled), "Regional migrant ratio", "Stale birth shares")
 pass("validation rejects bad counts")
+
+with_source <- function(data, source) {
+  attr(data, "source_variables") <- source
+  data
+}
+
+grouped <- function(codes, origin, file, main = NULL, detail = NULL) {
+  lfs <- tibble::tibble(BIRTH_CODE = codes)
+  src <- c(BIRTH_CODE = origin)
+  if (!is.null(main)) {
+    lfs$BIRTH_MAIN <- main
+    src <- c(src, BIRTH_MAIN = "CRYOX7_EUL_Main")
+  }
+  if (!is.null(detail)) {
+    lfs$BIRTH_DETAIL <- detail
+    src <- c(src, BIRTH_DETAIL = "CRYO7")
+  }
+  add_derived(with_source(lfs, src), file)
+}
+
+expect_groups <- function(actual, expected, label) {
+  actual <- as.character(actual)
+  if (length(actual) != length(expected) || any(is.na(actual) != is.na(expected)) ||
+      any(actual[!is.na(actual)] != expected[!is.na(expected)])) {
+    stop(
+      label, ": got ", paste(actual, collapse = ","),
+      ", expected ", paste(expected, collapse = ","), ".",
+      call. = FALSE
+    )
+  }
+  invisible(NULL)
+}
+
+cryox <- grouped(
+  c(1, 27, 16, 24, 31, 12, 102, NA),
+  "CRYOX",
+  "cryox-synthetic"
+)
+expect_groups(
+  cryox$birth3,
+  c("UK", "EU", "EU", NA, NA, "EU", NA, NA),
+  "CRYOX groups"
+)
+if (!identical(attr(cryox, "birthplace_source"), "CRYOX")) {
+  stop("CRYOX source was not recorded.", call. = FALSE)
+}
+if (!identical(as.logical(cryox$not_uk), as.logical(!cryox$birth3 == "UK"))) {
+  stop("not_uk does not match the UK-born flag.", call. = FALSE)
+}
+cryox$WEIGHT <- 1
+cryox_stats <- residence_stats(cryox, NA_character_, NA_character_)
+expect_close(cryox_stats$pop_uk_born, 1, "CRYOX UK count")
+expect_close(cryox_stats$pop_eu_born, 3, "CRYOX EU count")
+expect_close(cryox_stats$pop_non_eu_born, 0, "CRYOX non-EU count")
+expect_close(cryox_stats$pop_birthplace_unknown, 4, "CRYOX unclassified count")
+pass("CRYOX predecessor states and Gibraltar")
+
+must_stop(
+  grouped(c(911, 724), "CRYOX7", "spain-code"),
+  "no UKDA label",
+  "ISO 724 is not a CRYOX7 code"
+)
+pass("undocumented CRYOX7 code is rejected")
+cryox7 <- grouped(
+  c(926, 911, 912, 902, 971, 292, 248, 972, 973, 991, 831, NA),
+  "CRYOX7",
+  "cryox7-synthetic",
+  main = c(1, 2, 2, 2, 2, 2, 2, 3, 3, 5, 1, 1),
+  detail = c(833, 911, 912, 902, 971, 292, 248, 972, 973, 991, 831, 250)
+)
+expect_groups(
+  cryox7$birth3,
+  c("UK", "EU", "EU", "EU", "EU", "EU", "EU", "non-EU", "non-EU", NA, "non-EU", NA),
+  "CRYOX7 groups"
+)
+# The last country code is missing. EUL would call that row UK. It stays missing.
+if (!is.na(cryox7$birth3[12])) {
+  stop("A missing country code was filled from CRYOX7_EUL_Main.", call. = FALSE)
+}
+if (!identical(attr(cryox7, "birthplace_source"), "CRYOX7")) {
+  stop("CRYOX7 was not preferred to EUL.", call. = FALSE)
+}
+overlap <- attr(cryox7, "birth_overlap")
+if (!identical(overlap$compared, "CRYO7") || overlap$n_crown != 1L ||
+    overlap$n_disagree != 1L) {
+  stop(
+    "CRYO7 overlap was ", overlap$compared, " n=", overlap$n,
+    " disagree=", overlap$n_disagree, " crown=", overlap$n_crown, ".",
+    call. = FALSE
+  )
+}
+if (!identical(as.character(uk_born_flag(cryox7, "cryox7-synthetic")),
+               as.character(cryox7$birth3 == "UK"))) {
+  stop("uk_born_flag does not match birth3.", call. = FALSE)
+}
+pass("CRYOX7 codes, missing values, and CRYO7 overlap")
+
+fallback <- tibble::tibble(
+  BIRTH_CODE = c(NA_real_, NA_real_, NA_real_, NA_real_),
+  BIRTH_MAIN = c(1, 2, 4, NA)
+)
+fallback <- add_derived(
+  with_source(fallback, c(BIRTH_CODE = "CRYOX7", BIRTH_MAIN = "CRYOX7_EUL_Main")),
+  "empty-country-code"
+)
+expect_groups(fallback$birth3, c("UK", "EU", "non-EU", NA), "EUL fallback")
+if (!identical(attr(fallback, "birthplace_source"), "CRYOX7_EUL_Main")) {
+  stop("All-missing CRYOX7 did not fall back to CRYOX7_EUL_Main.", call. = FALSE)
+}
+pass("all-missing country code falls back to EUL")
+
+must_stop(
+  birth_group(tibble::tibble(BIRTH_CODE = c(NA_real_, NA_real_)), "no-birth"),
+  "no usable birthplace",
+  "No usable birthplace"
+)
+pass("missing birthplace sources are rejected")
+
+pay_rows <- residence_stats(
+  data.frame(
+    birth3 = factor(
+      c("UK", "UK", "UK", "EU", "non-EU", "UK", NA),
+      levels = unname(birth_shares)
+    ),
+    WEIGHT = rep(1, 7),
+    INCOME_WEIGHT = c(2, 2, 0, 3, 4, NA, 5),
+    HOURPAY = c(10, 0, 12, 8, 9, 11, 7),
+    STATR_LABEL = rep("Employee", 7),
+    stringsAsFactors = FALSE
+  ),
+  NA_character_,
+  NA_character_
+)
+expect_close(pay_rows$n_pay, 4, "Eligible employees")
+expect_close(pay_rows$n_pay_uk_born, 1, "Eligible UK-born employees")
+expect_close(pay_rows$n_pay_eu_born, 1, "Eligible EU-born employees")
+expect_close(pay_rows$n_pay_non_eu_born, 1, "Eligible non-EU-born employees")
+expect_close(pay_rows$mean_log_hourpay_uk_born, log(10), "UK-born mean log wage")
+expect_close(
+  pay_rows$mean_log_hourpay,
+  (2 * log(10) + 3 * log(8) + 4 * log(9) + 5 * log(7)) / 14,
+  "All-employee mean log wage"
+)
+expect_close(pay_rows$mean_log_hourpay_eu_born, log(8), "EU-born mean log wage")
+expect_close(pay_rows$mean_log_hourpay_non_eu_born, log(9), "Non-EU-born mean log wage")
+pass("native wage count uses the wage-sample rule")
+
+sample_panel <- data.frame(
+  residence = c("A", "B", "C", "D"),
+  year = c(2016, 2016, 2016, 2016),
+  quarter = c(1, 1, 1, 1),
+  n_pay_uk_born = c(0, 12, 40, 120),
+  mean_log_hourpay_uk_born = c(NA, log(10), log(11), log(12)),
+  stringsAsFactors = FALSE
+)
+sample_summary <- summarise_native_pay_sample(sample_panel)
+if (sample_summary$min != 0 || sample_summary$median != 26 ||
+    sample_summary$max != 120 || sample_summary$n_below_30 != 2L ||
+    sample_summary$n_below_50 != 3L || sample_summary$n_below_100 != 3L ||
+    sample_summary$missing_wage_at_zero != 1L ||
+    sample_summary$missing_wage_when_positive != 0L) {
+  stop("Native wage-sample summary does not match the synthetic cells.", call. = FALSE)
+}
+pass("native wage-sample summary")
 
 message("All ", passed, " birthplace-count checks passed.")
