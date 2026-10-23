@@ -201,6 +201,7 @@ run_guarded({
         coefficient = unname(tab[name, "Estimate"]),
         std_error = unname(tab[name, "Std. Error"]),
         p_value = unname(tab[name, "Pr(>|t|)"]),
+        t_df = as.numeric(degrees_freedom(model, type = "t"))[1],
         stringsAsFactors = FALSE
       )
     }))
@@ -344,7 +345,7 @@ run_guarded({
   coefs <- bind_rows(rows) %>%
     select(
       step, design, estimator, residence_fe, year_fe, ethnicity, covid, education, age,
-      endogenous, coefficient, std_error, p_value, n_obs, n_clusters,
+      endogenous, coefficient, std_error, p_value, t_df, n_obs, n_clusters,
       first_stage_f, hausman_p
     )
 
@@ -359,13 +360,19 @@ run_guarded({
     stop("Hausman p-value differs within a design and step.", call. = FALSE)
   }
 
-  out_dir <- here("outputs", "annual")
-  table_dir <- here("outputs", "annual", "tables")
-  assert_annual_output(out_dir)
+  table_dir <- here("outputs", "regressions", "annual", "tables")
+  coef_path <- here(
+    "outputs", "regressions", "annual", "coefficients", "main_annual_coefficients.csv"
+  )
+  notes_path <- here(
+    "outputs", "regressions", "annual", "diagnostics", "estimation_notes.csv"
+  )
   assert_annual_output(table_dir)
+  assert_annual_output(coef_path)
+  assert_annual_output(notes_path)
   dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
-  coef_path <- file.path(out_dir, "main_annual_coefficients.csv")
-  notes_path <- file.path(out_dir, "estimation_notes.csv")
+  dir.create(dirname(coef_path), recursive = TRUE, showWarnings = FALSE)
+  dir.create(dirname(notes_path), recursive = TRUE, showWarnings = FALSE)
   assert_annual_output(coef_path)
   assert_annual_output(notes_path)
   write_csv(coefs, coef_path, na = "")

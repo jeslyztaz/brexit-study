@@ -6,7 +6,7 @@ This file is the annual robustness check. The quarterly analysis in `docs/reside
 
 ## Residence-year rows
 
-One row is one URESMC residence in one calendar year. The year is January–December: Q1, Q2, Q3, and Q4. A year is used only when all four quarterly files are present. A year with no file, or with fewer than four quarters, is listed in `outputs/annual/annual_year_coverage.csv` and is not given rows. Those years are not treated as complete. In the extract used to build this check, 2026 has Q1 and Q2 only, so 2026 is excluded. The quarterly regression still includes 2026 Q1–Q2.
+One row is one URESMC residence in one calendar year. The year is January–December: Q1, Q2, Q3, and Q4. A year is used only when all four quarterly files are present. A year with no file, or with fewer than four quarters, is listed in `outputs/metadata/annual_year_coverage.csv` and is not given rows. Those years are not treated as complete. In the extract used to build this check, 2026 has Q1 and Q2 only, so 2026 is excluded. The quarterly regression still includes 2026 Q1–Q2.
 
 The LFS rotates addresses, and a respondent can be interviewed in more than one quarter. This build does not link people across quarters and does not use person fixed effects. Each interview stays in its own quarter. The annual figures are pooled cross-sectional labour-market statistics, not individual transitions.
 
@@ -74,16 +74,16 @@ Annual files are written under paths that the quarterly scripts do not use.
 
 - `data/processed/residence_annual_panel.csv`
 - `data/processed/residence_annual_regression.csv`
-- `outputs/annual/annual_year_coverage.csv`
-- `outputs/annual/aggregation_checks.csv`
-- `outputs/annual/descriptive_stats.csv`
-- `outputs/annual/national_ratios_by_year.csv`
-- `outputs/annual/figures/`
-- `outputs/annual/main_annual_coefficients.csv`
-- `outputs/annual/estimation_notes.csv`
-- `outputs/annual/tables/`
-- `outputs/annual/quarterly_vs_annual_coefficients.csv`
-- `outputs/annual/quarterly_vs_annual_coefficients.txt`
-- `outputs/annual/validation_against_quarterly.csv`
+- `outputs/metadata/annual_year_coverage.csv`
+- `outputs/metadata/aggregation_checks.csv`
+- `outputs/metadata/validation_against_quarterly.csv`
+- `outputs/descriptive/annual/tables/descriptive_stats.csv`
+- `outputs/descriptive/annual/tables/national_ratios_by_year.csv`
+- `outputs/descriptive/annual/`
+- `outputs/regressions/annual/coefficients/main_annual_coefficients.csv`
+- `outputs/regressions/annual/diagnostics/estimation_notes.csv`
+- `outputs/regressions/annual/tables/`
+- `outputs/regressions/annual/diagnostics/quarterly_vs_annual_coefficients.csv`
+- `outputs/regressions/annual/diagnostics/quarterly_vs_annual_coefficients.txt`
 
-`outputs/annual/quarterly_vs_annual_coefficients.csv` places the quarterly coefficient, standard error, p-value, sample size, cluster count, first-stage F, and Wu–Hausman p-value next to the annual ones. The quarterly column is the main specification. The annual column is the robustness check.
+`outputs/regressions/annual/diagnostics/quarterly_vs_annual_coefficients.csv` places the quarterly coefficient, standard error, p-value, sample size, cluster count, first-stage F, and Wu–Hausman p-value next to the annual ones. The quarterly column is the main specification. The annual column is the robustness check. The quarterly estimates themselves are in `outputs/regressions/quarterly/coefficients/main_qoq_coefficients.csv`.

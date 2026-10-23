@@ -25,8 +25,8 @@ run_guarded({
   }
 
   panel_path <- here("data", "processed", "residence_annual_panel.csv")
-  coverage_path <- here("outputs", "annual", "annual_year_coverage.csv")
-  checks_path <- here("outputs", "annual", "aggregation_checks.csv")
+  coverage_path <- here("outputs", "metadata", "annual_year_coverage.csv")
+  checks_path <- here("outputs", "metadata", "aggregation_checks.csv")
   for (path in c(panel_path, coverage_path, checks_path)) {
     assert_annual_output(path)
   }

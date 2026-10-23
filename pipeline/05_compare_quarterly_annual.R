@@ -1,7 +1,7 @@
 # Compare the main quarterly specification with the annual robustness check.
 # Source this from the project root after both regression files and both
 # coefficient files exist. It reads the quarterly outputs and writes only
-# under outputs/annual/.
+# under outputs/regressions/annual/ and outputs/metadata/.
 #
 # Both estimation samples are year > 2020. Steps 0-5 are paired: residence
 # and year fixed effects, ethnicity, 2020 COVID mortality x year, education,
@@ -26,10 +26,16 @@ run_guarded({
   a_panel_file <- here("data", "processed", "residence_annual_panel.csv")
   q_reg_file <- here("data", "processed", "residence_quarter_regression.csv")
   a_reg_file <- here("data", "processed", "residence_annual_regression.csv")
-  q_coef_file <- here("outputs", "main_qoq_coefficients.csv")
-  a_coef_file <- here("outputs", "annual", "main_annual_coefficients.csv")
-  checks_file <- here("outputs", "annual", "aggregation_checks.csv")
-  notes_file <- here("outputs", "annual", "estimation_notes.csv")
+  q_coef_file <- here(
+    "outputs", "regressions", "quarterly", "coefficients", "main_qoq_coefficients.csv"
+  )
+  a_coef_file <- here(
+    "outputs", "regressions", "annual", "coefficients", "main_annual_coefficients.csv"
+  )
+  checks_file <- here("outputs", "metadata", "aggregation_checks.csv")
+  notes_file <- here(
+    "outputs", "regressions", "annual", "diagnostics", "estimation_notes.csv"
+  )
   for (path in c(
     q_panel_file, a_panel_file, q_reg_file, a_reg_file,
     q_coef_file, a_coef_file, checks_file, notes_file
@@ -634,10 +640,17 @@ run_guarded({
       arrange(step, design, estimator, endogenous_annual)
   }
 
-  out_dir <- here("outputs", "annual")
-  validation_path <- file.path(out_dir, "validation_against_quarterly.csv")
-  compare_path <- file.path(out_dir, "quarterly_vs_annual_coefficients.csv")
-  text_path <- file.path(out_dir, "quarterly_vs_annual_coefficients.txt")
+  validation_path <- here("outputs", "metadata", "validation_against_quarterly.csv")
+  compare_path <- here(
+    "outputs", "regressions", "annual", "diagnostics",
+    "quarterly_vs_annual_coefficients.csv"
+  )
+  text_path <- here(
+    "outputs", "regressions", "annual", "diagnostics",
+    "quarterly_vs_annual_coefficients.txt"
+  )
+  dir.create(dirname(validation_path), recursive = TRUE, showWarnings = FALSE)
+  dir.create(dirname(compare_path), recursive = TRUE, showWarnings = FALSE)
   for (path in c(validation_path, compare_path, text_path)) {
     assert_annual_output(path)
   }

@@ -137,6 +137,7 @@ coef_rows <- function(model, endogenous, estimator) {
       coefficient = unname(tab[name, "Estimate"]),
       std_error = unname(tab[name, "Std. Error"]),
       p_value = unname(tab[name, "Pr(>|t|)"]),
+      t_df = as.numeric(degrees_freedom(model, type = "t"))[1],
       stringsAsFactors = FALSE
     )
   }))
@@ -253,7 +254,7 @@ coefs <- bind_rows(rows) %>%
   select(
     step, design, estimator, residence_fe, year_fe, period_fe, ethnicity, covid,
     education, age,
-    endogenous, coefficient, std_error, p_value, n_obs, n_clusters,
+    endogenous, coefficient, std_error, p_value, t_df, n_obs, n_clusters,
     first_stage_f, hausman_p
   )
 
@@ -268,10 +269,11 @@ if (any(hausman_check$n_p != 1L)) {
   stop("Hausman p-value differs within a design and step.", call. = FALSE)
 }
 
-out_dir <- here("outputs")
-table_dir <- here("outputs", "tables")
+table_dir <- here("outputs", "regressions", "quarterly", "tables")
 dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
-coef_path <- file.path(out_dir, "main_qoq_coefficients.csv")
+coef_path <- output_file(
+  "regressions", "quarterly", "coefficients", "main_qoq_coefficients.csv"
+)
 write_csv(coefs, coef_path, na = "")
 
 show_num <- function(x) ifelse(is.na(x), "", sprintf("%.4g", x))

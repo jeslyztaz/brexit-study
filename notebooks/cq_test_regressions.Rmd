@@ -296,6 +296,112 @@ model_q_pool_iv_5 <- feols(
 etable(model_q_pool_iv_5, fitstat = ~ . + ivf + ivwald, stage = 1:2)
 ```
 
+### Step 5 2SLS, inclusive national migrant shift
+
+`shift_share_qoq_migrant` is the 2017–2019 baseline times the quarter-to-quarter change in the leave-one-out national migrant ratio. Here the shift is `d_qoq_national_ratio_migrant`, the same change in the national migrant ratio with every residence included. The outcome, controls, fixed effects, sample, and clustering match the step 5 2SLS above.
+
+```{r q-pool-iv-5-inclusive}
+if (!all(c("baseline_ratio_migrant", "d_qoq_national_ratio_migrant") %in% names(q_reg))) {
+  stop("q_reg needs baseline_ratio_migrant and d_qoq_national_ratio_migrant.")
+}
+q_inclusive <- q_reg %>%
+  mutate(
+    shift_share_qoq_migrant_inclusive =
+      baseline_ratio_migrant * d_qoq_national_ratio_migrant
+  )
+if (any(!is.finite(q_inclusive$shift_share_qoq_migrant_inclusive))) {
+  stop("Inclusive shift-share is missing on a step 5 row.")
+}
+model_q_pool_iv_5_inclusive <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant_inclusive,
+  data = q_inclusive,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_5_inclusive, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 2SLS, population-weighted leave-one-out shift
+
+`shift_share_qoq_migrant` multiplies the 2017–2019 baseline by the quarter-to-quarter change in the other residences' pooled migrant stock over their pooled native stock. This chunk builds the leave-one-out change as the average of the other residences' own quarter-to-quarter migrant-ratio changes, weighted by each residence's population in that quarter. Population is `pop` on the residence-quarter panel: the person-weighted count of residents aged 16–64, with unknown birthplace included. The instrument is the baseline times that average. The outcome, controls, fixed effects, sample, and clustering match the step 5 2SLS.
+
+```{r q-pool-iv-5-loo-pop}
+panel_pop <- read_csv(
+  here("data", "processed", "residence_quarter_panel_full.csv"),
+  show_col_types = FALSE
+) %>%
+  transmute(
+    residence = as.character(residence),
+    year = as.integer(year),
+    quarter = as.integer(quarter),
+    pop = as.numeric(pop)
+  )
+if (anyDuplicated(panel_pop[c("residence", "year", "quarter")]) > 0L) {
+  stop("Duplicate residence-quarter rows in the panel population.")
+}
+if (any(!is.finite(panel_pop$pop) | panel_pop$pop <= 0)) {
+  stop("Population must be finite and positive.")
+}
+ratio_changes <- read_csv(
+  here("data", "processed", "residence_quarter_regression.csv"),
+  show_col_types = FALSE
+) %>%
+  transmute(
+    residence = as.character(residence),
+    year = as.integer(year),
+    quarter = as.integer(quarter),
+    d_qoq_ratio_migrant = as.numeric(d_qoq_ratio_migrant)
+  ) %>%
+  left_join(panel_pop, by = c("residence", "year", "quarter"))
+if (any(!is.finite(ratio_changes$pop))) {
+  stop("A residence-quarter is missing population.")
+}
+loo_pop <- ratio_changes %>%
+  group_by(year, quarter) %>%
+  mutate(
+    n_areas = n(),
+    n_finite = sum(is.finite(d_qoq_ratio_migrant)),
+    d_loo_ratio_migrant_pop =
+      (sum(pop_uk_born * d_qoq_ratio_migrant) - pop * d_qoq_ratio_migrant) /
+      (sum(pop) - pop)
+  ) %>%
+  ungroup() %>%
+  select(residence, year, quarter, n_areas, n_finite, d_loo_ratio_migrant_pop)
+q_loo_pop <- q_reg %>%
+  mutate(quarter = as.integer(quarter)) %>%
+  left_join(loo_pop, by = c("residence", "year", "quarter")) %>%
+  mutate(
+    shift_share_qoq_migrant_loo_pop =
+      baseline_ratio_migrant * d_loo_ratio_migrant_pop
+  )
+if (nrow(q_loo_pop) != nrow(q_reg)) {
+  stop("Population-weighted leave-one-out join changed the row count.")
+}
+if (any(q_loo_pop$n_areas != 20L | q_loo_pop$n_finite != 20L)) {
+  stop("A step 5 quarter does not have a finite migrant-ratio change for all 20 residences.")
+}
+if (any(!is.finite(q_loo_pop$shift_share_qoq_migrant_loo_pop))) {
+  stop("Population-weighted leave-one-out shift-share is missing on a step 5 row.")
+}
+model_q_pool_iv_5_loo_pop <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant_loo_pop,
+  data = q_loo_pop,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_5_loo_pop, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
 ## Quarterly EU and non-EU
 
 The endogenous variables are `d_qoq_ratio_eu` and `d_qoq_ratio_non_eu`. The instruments are `shift_share_qoq_eu` and `shift_share_qoq_non_eu`.

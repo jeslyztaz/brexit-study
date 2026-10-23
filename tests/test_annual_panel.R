@@ -407,16 +407,33 @@ with_quarter$quarter <- 1L
 must_stop(construct_variables_annual(with_quarter), "quarterly", "Quarter column")
 pass("annual variable checks reject bad inputs")
 
-assert_annual_output(here("outputs", "annual", "main_annual_coefficients.csv"))
+assert_annual_output(here(
+  "outputs", "regressions", "annual", "coefficients", "main_annual_coefficients.csv"
+))
 must_stop(
-  assert_annual_output(here("outputs", "main_qoq_coefficients.csv")),
+  assert_annual_output(here(
+    "outputs", "regressions", "quarterly", "coefficients", "main_qoq_coefficients.csv"
+  )),
   "quarterly",
   "Quarterly coefficient path"
 )
 must_stop(
-  assert_annual_output(here("outputs", "figures", "ratio_levels_by_residence.png")),
+  assert_annual_output(here(
+    "outputs", "descriptive", "quarterly", "migration", "levels",
+    "ratio_levels_by_residence.png"
+  )),
   "quarterly",
   "Quarterly figure path"
+)
+must_stop(
+  assert_annual_output(here("outputs", "main_qoq_coefficients.csv")),
+  "quarterly",
+  "Old quarterly coefficient path"
+)
+must_stop(
+  assert_annual_output(here("outputs", "figures", "ratio_levels_by_residence.png")),
+  "quarterly",
+  "Old quarterly figure path"
 )
 pass("annual outputs cannot use quarterly paths")
 
