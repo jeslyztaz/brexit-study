@@ -49,8 +49,10 @@ baseline_ratio_non_eu uses only 2017 through 2019,TRUE,20,1.3877787807814457e-17
 baseline_ratio_migrant_2010_2015 uses only 2010 through 2015,TRUE,20,1.3877787807814457e-17,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
 baseline_ratio_eu_2010_2015 uses only 2010 through 2015,TRUE,20,6.938893903907228e-18,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
 baseline_ratio_non_eu_2010_2015 uses only 2010 through 2015,TRUE,20,1.3877787807814457e-17,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
-annual period is the calendar year,TRUE,400,0,0,TRUE,Year fixed effects use this column. It is not a quarter label.
-annual regression sample is year > 2015 complete cases,TRUE,30,0,0,TRUE,200 residence-years and 20 residences. n_obs and n_clusters match.
-annual regression endogenous variable is the contemporaneous change,TRUE,30,0,0,TRUE,d_annual_*_l1 is not a regressor.
-annual formulas use year fixed effects and residence clusters,TRUE,20,0,0,TRUE,Steps 1-4 use residence + period. The Jaeger lag is not in the formula.
-quarterly and annual specifications align by step,TRUE,30,0,0,TRUE,"Residence, ethnicity, education, and age flags match. Quarter FE matches year FE."
+annual period is the calendar year,TRUE,400,0,0,TRUE,period stores the calendar year. The regression's time fixed effect is year.
+annual regression sample is year > 2020 complete cases,TRUE,36,0,0,TRUE,100 residence-years and 20 residences. n_obs and n_clusters match.
+quarterly regression sample is year > 2020 complete cases,TRUE,42,0,0,TRUE,440 residence-quarters and 20 residences. n_obs and n_clusters match.
+annual regression endogenous variable is the contemporaneous change,TRUE,36,0,0,TRUE,d_annual_*_l1 is not a regressor.
+annual formulas use year fixed effects and residence clusters,TRUE,24,0,0,TRUE,"Steps 1-5 use residence + year. COVID year interactions enter at step 3, before education. 2021 is omitted."
+quarterly and annual specifications align on steps 0-5,TRUE,36,0,0,TRUE,"Residence, year FE, ethnicity, COVID, education, and age flags match. Period FE is off."
+quarterly step 6 replaces year fixed effects with period fixed effects,TRUE,6,0,0,TRUE,"Same controls as step 5, on the same sample. No annual counterpart."

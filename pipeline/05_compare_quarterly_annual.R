@@ -2,6 +2,11 @@
 # Source this from the project root after both regression files and both
 # coefficient files exist. It reads the quarterly outputs and writes only
 # under outputs/annual/.
+#
+# Both estimation samples are year > 2020. Steps 0-5 are paired: residence
+# and year fixed effects, ethnicity, 2020 COVID mortality x year, education,
+# then age. Quarterly step 6 keeps those controls and replaces year fixed
+# effects with period fixed effects. It has no annual counterpart.
 
 source("setup.R")
 source(here("pipeline", "annual_common.R"))
@@ -452,7 +457,7 @@ run_guarded({
   add_check(
     "annual period is the calendar year",
     TRUE, nrow(a_reg), period_gap, 0,
-    "Year fixed effects use this column. It is not a quarter label."
+    "period stores the calendar year. The regression's time fixed effect is year."
   )
 
   reg_columns <- c(
@@ -466,16 +471,39 @@ run_guarded({
     "d_annual_mean_age_uk_born"
   )
   sample <- a_reg %>%
-    filter(year > 2015) %>%
+    filter(year > 2020) %>%
     filter(if_all(all_of(reg_columns), ~ !is.na(.)))
   sample_gap <- max(abs(a_coef$n_obs - nrow(sample)))
   cluster_gap <- max(abs(a_coef$n_clusters - n_distinct(sample$residence)))
   add_check(
-    "annual regression sample is year > 2015 complete cases",
+    "annual regression sample is year > 2020 complete cases",
     TRUE, nrow(a_coef), max(sample_gap, cluster_gap), 0,
     paste0(
       nrow(sample), " residence-years and ",
       n_distinct(sample$residence), " residences. n_obs and n_clusters match."
+    )
+  )
+  q_reg_columns <- c(
+    "d_qoq_mean_log_hourpay_uk_born", "residence", "period",
+    "d_qoq_ratio_migrant", "shift_share_qoq_migrant",
+    "d_qoq_ratio_eu", "d_qoq_ratio_non_eu",
+    "shift_share_qoq_eu", "shift_share_qoq_non_eu",
+    "d_qoq_share_uk_asian", "d_qoq_share_uk_black",
+    "d_qoq_share_uk_chinese", "d_qoq_share_uk_eth_other",
+    "d_qoq_share_uk_degree", "d_qoq_share_uk_low_qual",
+    "d_qoq_mean_age_uk_born"
+  )
+  q_sample <- q_reg %>%
+    filter(year > 2020) %>%
+    filter(if_all(all_of(q_reg_columns), ~ !is.na(.)))
+  q_sample_gap <- max(abs(q_coef$n_obs - nrow(q_sample)))
+  q_cluster_gap <- max(abs(q_coef$n_clusters - n_distinct(q_sample$residence)))
+  add_check(
+    "quarterly regression sample is year > 2020 complete cases",
+    TRUE, nrow(q_coef), max(q_sample_gap, q_cluster_gap), 0,
+    paste0(
+      nrow(q_sample), " residence-quarters and ",
+      n_distinct(q_sample$residence), " residences. n_obs and n_clusters match."
     )
   )
   jaeger_in_regression <- any(grepl("_l1$", a_coef$endogenous))
@@ -494,17 +522,38 @@ run_guarded({
   cluster[is.na(cluster)] <- ""
   collinear <- notes$collinear
   collinear[is.na(collinear)] <- ""
-  fe_expected <- ifelse(notes$step == 0, "", "residence + period")
+  fe_expected <- ifelse(as.integer(notes$step) == 0L, "", "residence + year")
+  covid_years <- sort(setdiff(unique(as.integer(sample$year)), 2021L))
+  covid_terms <- paste0("covid_asmr_2020_y", covid_years)
+  ladder_gap <- 0L
+  for (i in seq_len(nrow(notes))) {
+    text <- formula[[i]]
+    step_id <- as.integer(notes$step[[i]])
+    present <- vapply(covid_terms, function(term) grepl(term, text, fixed = TRUE), logical(1))
+    has_eth <- grepl("d_annual_share_uk_asian", text, fixed = TRUE)
+    has_edu <- grepl("d_annual_share_uk_degree", text, fixed = TRUE)
+    has_age <- grepl("d_annual_mean_age_uk_born", text, fixed = TRUE)
+    covid_bad <- if (step_id < 3L) {
+      any(present) || grepl("covid_asmr_", text)
+    } else {
+      !all(present) || grepl("covid_asmr_2020_y2021", text, fixed = TRUE)
+    }
+    order_bad <- (step_id >= 2L) != has_eth ||
+      (step_id >= 4L) != has_edu ||
+      (step_id >= 5L) != has_age
+    if (covid_bad || order_bad) ladder_gap <- 1L
+  }
   formula_gap <- if (
     all(cluster == "residence") &&
       all(fixed_effects == fe_expected) &&
       !any(grepl("_l1", formula)) &&
-      all(grepl("d_annual_", formula))
+      all(grepl("d_annual_", formula)) &&
+      ladder_gap == 0L
   ) 0 else 1
   add_check(
     "annual formulas use year fixed effects and residence clusters",
     TRUE, nrow(notes), formula_gap, 0,
-    "Steps 1-4 use residence + period. The Jaeger lag is not in the formula."
+    "Steps 1-5 use residence + year. COVID year interactions enter at step 3, before education. 2021 is omitted."
   )
   if (any(nzchar(collinear))) {
     message(
@@ -517,23 +566,48 @@ run_guarded({
   q_coef <- q_coef %>%
     mutate(endogenous_annual = sub("^d_qoq_ratio_", "d_annual_ratio_", endogenous))
   mapped <- all(grepl("^d_annual_ratio_", q_coef$endogenous_annual))
-  cmp <- q_coef %>%
+  q_steps <- as.integer(sort(unique(q_coef$step)))
+  a_steps <- as.integer(sort(unique(a_coef$step)))
+  q_shared <- q_coef %>% filter(as.integer(step) < 6L)
+  q_period <- q_coef %>%
+    filter(as.integer(step) == 6L) %>%
+    arrange(design, estimator, endogenous)
+  cmp <- q_shared %>%
     inner_join(
       a_coef,
       by = c("step", "design", "estimator", "endogenous_annual" = "endogenous"),
       suffix = c("_quarterly", "_annual")
     )
-  join_ok <- mapped && nrow(cmp) == nrow(q_coef) && nrow(cmp) == nrow(a_coef)
+  join_ok <- mapped &&
+    identical(q_steps, 0:6) &&
+    identical(a_steps, 0:5) &&
+    nrow(cmp) == nrow(q_shared) &&
+    nrow(cmp) == nrow(a_coef)
   flags_ok <- join_ok &&
     all(cmp$residence_fe_quarterly == cmp$residence_fe_annual) &&
+    all(cmp$year_fe_quarterly == cmp$year_fe_annual) &&
     all(cmp$ethnicity_quarterly == cmp$ethnicity_annual) &&
+    all(cmp$covid_quarterly == cmp$covid_annual) &&
     all(cmp$education_quarterly == cmp$education_annual) &&
     all(cmp$age_quarterly == cmp$age_annual) &&
-    all(cmp$quarter_fe == cmp$year_fe)
+    all(!cmp$period_fe)
   add_check(
-    "quarterly and annual specifications align by step",
+    "quarterly and annual specifications align on steps 0-5",
     TRUE, nrow(cmp), if (flags_ok) 0 else 1, 0,
-    "Residence, ethnicity, education, and age flags match. Quarter FE matches year FE."
+    "Residence, year FE, ethnicity, COVID, education, and age flags match. Period FE is off."
+  )
+  period_ok <- join_ok &&
+    nrow(q_period) == nrow(q_coef %>% filter(as.integer(step) == 5L)) &&
+    all(q_period$period_fe) &&
+    all(!q_period$year_fe) &&
+    all(q_period$residence_fe) &&
+    all(q_period$ethnicity & q_period$covid & q_period$education & q_period$age) &&
+    all(q_period$n_obs == nrow(q_sample)) &&
+    all(q_period$n_clusters == n_distinct(q_sample$residence))
+  add_check(
+    "quarterly step 6 replaces year fixed effects with period fixed effects",
+    TRUE, nrow(q_period), if (period_ok) 0 else 1, 0,
+    "Same controls as step 5, on the same sample. No annual counterpart."
   )
 
   if (join_ok) {
@@ -544,8 +618,10 @@ run_guarded({
         endogenous_quarterly = endogenous,
         endogenous_annual,
         residence_fe = residence_fe_quarterly,
-        quarter_fe, year_fe,
+        year_fe = year_fe_quarterly,
+        period_fe,
         ethnicity = ethnicity_quarterly,
+        covid = covid_quarterly,
         education = education_quarterly,
         age = age_quarterly,
         coefficient_quarterly, std_error_quarterly, p_value_quarterly,
@@ -594,6 +670,28 @@ run_guarded({
           show_num(row$coefficient_annual), show_num(row$std_error_annual),
           show_num(row$p_value_annual), row$n_obs_annual, row$n_clusters_annual,
           show_num(row$first_stage_f_annual), show_num(row$hausman_p_annual)
+        ),
+        ""
+      )
+    }
+    lines <- c(
+      lines,
+      "Quarterly step 6 keeps every control and replaces year fixed effects with period fixed effects. It has no annual counterpart.",
+      ""
+    )
+    for (i in seq_len(nrow(q_period))) {
+      row <- q_period[i, ]
+      lines <- c(
+        lines,
+        sprintf(
+          "step %s | %s | %s | %s",
+          row$step, row$design, row$estimator, row$endogenous
+        ),
+        sprintf(
+          "  quarterly: coef %s  se %s  p %s  n %s  clusters %s  first-stage F %s  hausman p %s",
+          show_num(row$coefficient), show_num(row$std_error),
+          show_num(row$p_value), row$n_obs, row$n_clusters,
+          show_num(row$first_stage_f), show_num(row$hausman_p)
         ),
         ""
       )
