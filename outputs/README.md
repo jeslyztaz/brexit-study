@@ -52,6 +52,7 @@ The 2017–2019 baseline bar chart and the annual EU heatmap are written once, f
 | `national_ratio_levels.png` | National migrant, EU, and non-EU ratio levels | `03_descriptive_analysis.R` | Quarterly regression file | No | `descriptive/quarterly/migration/levels/` |
 | `eu_ratio_heatmap_annual.png` | EU ratio by residence and complete year, ordered by the 2017–2019 baseline | `03_descriptive_analysis.R` | Quarterly regression file | No | `descriptive/quarterly/migration/levels/` |
 | `d_qoq_ratio_migrant_by_residence.png` | Quarter-to-quarter migrant-ratio changes | `03_descriptive_analysis.R` | Quarterly regression file | No | `descriptive/quarterly/migration/changes/` |
+| `d_qoq_native_pct_by_residence.png` | Quarter-to-quarter percent change in the UK-born stock, the migrant-ratio denominator | `03_descriptive_analysis.R` | Quarterly regression file | No | `descriptive/quarterly/migration/changes/` |
 | `d_qoq_ratio_eu_non_eu_by_residence.png` | Quarter-to-quarter EU and non-EU ratio changes | `03_descriptive_analysis.R` | Quarterly regression file | No | `descriptive/quarterly/migration/changes/` |
 | `national_d_qoq_ratios.png` | National quarter-to-quarter ratio changes | `03_descriptive_analysis.R` | Quarterly regression file | No | `descriptive/quarterly/migration/changes/` |
 | `post2021_ratio_change_distributions.png` | Post-2021 distributions of quarter-to-quarter ratio changes | `03_descriptive_analysis.R` | Quarterly regression file and COVID file | No | `descriptive/quarterly/migration/changes/` |
@@ -78,6 +79,7 @@ The 2017–2019 baseline bar chart and the annual EU heatmap are written once, f
 | `ratio_levels_by_residence.png` | Annual migrant, EU, and non-EU ratio levels | `03_descriptive_analysis_annual.R` | Annual regression file | No | `descriptive/annual/migration/levels/` |
 | `national_ratio_levels.png` | Annual national ratio levels | `03_descriptive_analysis_annual.R` | Annual regression file | No | `descriptive/annual/migration/levels/` |
 | `d_annual_ratio_migrant_by_residence.png` | One-year migrant-ratio changes | `03_descriptive_analysis_annual.R` | Annual regression file | No | `descriptive/annual/migration/changes/` |
+| `d_annual_native_pct_by_residence.png` | One-year percent change in the UK-born stock, the migrant-ratio denominator | `03_descriptive_analysis_annual.R` | Annual regression file | No | `descriptive/annual/migration/changes/` |
 | `d_annual_ratio_eu_non_eu_by_residence.png` | One-year EU and non-EU ratio changes | `03_descriptive_analysis_annual.R` | Annual regression file | No | `descriptive/annual/migration/changes/` |
 | `national_d_annual_ratios.png` | National one-year ratio changes | `03_descriptive_analysis_annual.R` | Annual regression file | No | `descriptive/annual/migration/changes/` |
 | `post2021_ratio_change_distributions.png` | Post-2021 distributions of one-year ratio changes | `03_descriptive_analysis_annual.R` | Annual regression file and COVID file | No | `descriptive/annual/migration/changes/` |

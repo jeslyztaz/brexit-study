@@ -1,7 +1,8 @@
 # Descriptive charts for the annual robustness check.
 #
 # Same series as pipeline/03_descriptive_analysis.R, on the residence-year
-# file. Years are dated at 1 July. A one-year change is missing in the
+# file, including the one-year percent change in the UK-born stock.
+# Years are dated at 1 July. A one-year change is missing in the
 # first calendar year because there is no previous year. The quarterly
 # charts and their directory are not written by this script.
 #
@@ -85,6 +86,39 @@ run_guarded({
     stop("Residence-years are not a complete consecutive calendar span.", call. = FALSE)
   }
 
+  # Percent change in the annual UK-born stock, the denominator of the
+  # migrant ratio. The previous year is matched on the calendar, as in
+  # difference_from_year(). The annual stock is the mean of that year's
+  # four quarterly weighted stocks, not their sum. This column is for the
+  # chart. It is not written back to the regression file.
+  native_keys <- tibble(
+    residence = as.character(reg$residence),
+    .annual_row = seq_len(nrow(reg)),
+    lag_year = as.integer(reg$year) - 1L
+  )
+  native_past <- tibble(
+    residence = as.character(reg$residence),
+    year = reg$year,
+    native_lag = reg$native
+  )
+  native_joined <- left_join(
+    native_keys,
+    native_past,
+    by = c("residence", "lag_year" = "year"),
+    relationship = "many-to-one"
+  )
+  native_joined <- native_joined %>% arrange(.annual_row)
+  if (nrow(native_joined) != nrow(reg) ||
+      any(native_joined$.annual_row != seq_len(nrow(reg)))) {
+    stop("UK-born lag join changed the annual rows.", call. = FALSE)
+  }
+  bad_lag <- is.finite(native_joined$native_lag) & native_joined$native_lag <= 0
+  if (any(bad_lag) || any(!is.finite(reg$native) | reg$native <= 0)) {
+    stop("UK-born stock is missing or not positive.", call. = FALSE)
+  }
+  reg$d_annual_native_pct <- 100 *
+    (reg$native - native_joined$native_lag) / native_joined$native_lag
+
   first_year <- min(reg$year)
   last_year <- max(reg$year)
   sample_caption <- paste0(
@@ -129,6 +163,7 @@ run_guarded({
     "d_annual_national_ratio_migrant", "d_annual_national_ratio_eu",
     "d_annual_national_ratio_non_eu",
     "d_annual_mean_log_hourpay_uk_born",
+    "d_annual_native_pct",
     "d_annual_mean_age_uk_born", "d_annual_share_uk_degree",
     "d_annual_share_uk_low_qual",
     "d_annual_share_uk_asian", "d_annual_share_uk_black",
@@ -405,6 +440,26 @@ run_guarded({
     "d_annual_ratio_migrant_by_residence.png",
     facet_width,
     facet_height,
+    "migration/changes"
+  )
+
+  save_figure(
+    plot_one(
+      reg,
+      "d_annual_native_pct",
+      "One-year percent change in the UK-born stock",
+      "Percent change",
+      paste(
+        sample_caption,
+        "The UK-born stock is the denominator of the migrant ratio.",
+        "Change is 100 times this year minus the previous year, divided by the previous year.",
+        "The annual stock is the mean of the four quarterly weighted stocks.",
+        "Residences share one vertical scale."
+      )
+    ),
+    "d_annual_native_pct_by_residence.png",
+    facet_width,
+    9,
     "migration/changes"
   )
 
@@ -825,7 +880,7 @@ run_guarded({
     wrote_annual_heatmap <- TRUE
   }
 
-  expected_charts <- if (wrote_annual_heatmap) 20L else 19L
+  expected_charts <- if (wrote_annual_heatmap) 21L else 20L
   if (n_saved != expected_charts) {
     stop("Expected ", expected_charts, " annual charts, wrote ", n_saved, ".", call. = FALSE)
   }

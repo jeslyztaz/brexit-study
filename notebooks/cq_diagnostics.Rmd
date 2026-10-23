@@ -5,25 +5,546 @@ date: "2026-10-23"
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
 ```
 
-## R Markdown
+## Setup
 
-This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+These chunks display the quarterly migration-exposure charts and the residence panels for ratio levels and quarter-to-quarter ratio changes. The constructions match `pipeline/03_descriptive_analysis.R`. The notebook reads `data/processed/residence_quarter_regression.csv` and does not write figures or tables.
 
-When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+```{r load}
+library(here)
+source(here("setup.R"))
 
-```{r cars}
-summary(cars)
+residence_levels <- c(
+  "Tyne & Wear", "Rest of Northern region", "South Yorkshire",
+  "West Yorkshire", "Rest of Yorks & Humberside", "East Midlands",
+  "East Anglia", "Inner London", "Outer London", "Rest of South East",
+  "South West", "West Midlands (met county)", "Rest of West Midlands",
+  "Greater Manchester", "Merseyside", "Rest of North West", "Wales",
+  "Strathclyde", "Rest of Scotland", "Northern Ireland"
+)
+
+series_colours <- c(
+  "Migrant" = "#222222",
+  "EU" = "#0072B2",
+  "Non-EU" = "#D55E00"
+)
+
+transition <- as.Date("2021-01-01")
+transition_caption <- paste(
+  "Dashed line is 1 January 2021, the end of the Brexit transition period.",
+  "Quarters are dated at the middle month. Sample is 2006 Q1 to 2026 Q2."
+)
+
+quarter_midpoint <- function(year, quarter) {
+  if (any(!quarter %in% 1:4)) {
+    stop("Quarter must be 1, 2, 3, or 4.", call. = FALSE)
+  }
+  month <- c(2L, 5L, 8L, 11L)[quarter]
+  as.Date(sprintf("%d-%02d-15", year, month))
+}
+
+data_file <- here("data", "processed", "residence_quarter_regression.csv")
+if (!file.exists(data_file)) {
+  stop(
+    "Cannot find ", data_file, ". Run pipeline/02_construct_variables.R first.",
+    call. = FALSE
+  )
+}
+
+reg <- read_csv(data_file, show_col_types = FALSE) %>%
+  mutate(
+    year = as.integer(year),
+    quarter = as.integer(quarter)
+  )
+
+unknown <- setdiff(unique(reg$residence), residence_levels)
+missing_residence <- setdiff(residence_levels, unique(reg$residence))
+if (length(unknown) > 0L || length(missing_residence) > 0L) {
+  stop("Residence names do not match the URESMC list.", call. = FALSE)
+}
+
+reg <- reg %>%
+  mutate(
+    date = quarter_midpoint(year, quarter),
+    residence = factor(residence, levels = residence_levels)
+  )
+if (anyNA(reg$date) || anyNA(reg$residence)) {
+  stop("Date or residence is missing.", call. = FALSE)
+}
+if (anyDuplicated(reg[c("residence", "year", "quarter")]) > 0L) {
+  stop("Duplicate residence-year-quarter rows.", call. = FALSE)
+}
+
+x_limits <- range(reg$date)
+year_breaks <- as.Date(sprintf("%d-02-15", c(2010, 2016, 2022)))
+
+base_theme <- function() {
+  theme_bw(base_size = 11) +
+    theme(
+      legend.position = "bottom",
+      legend.key.width = unit(1.2, "cm"),
+      strip.text = element_text(size = 7.5),
+      axis.text = element_text(size = 7),
+      panel.grid.minor = element_blank(),
+      panel.spacing.x = unit(0.7, "lines"),
+      panel.spacing.y = unit(0.45, "lines"),
+      plot.caption = element_text(hjust = 0, size = 8, lineheight = 1.05),
+      plot.title = element_text(size = 12)
+    )
+}
+
+x_scale <- function() {
+  scale_x_date(
+    limits = x_limits,
+    breaks = year_breaks,
+    date_labels = "%Y",
+    expand = expansion(mult = 0.02)
+  )
+}
+
+mark_transition <- function() {
+  geom_vline(
+    xintercept = transition,
+    linewidth = 0.3,
+    linetype = "dashed",
+    colour = "grey40",
+    inherit.aes = FALSE
+  )
+}
+
+zero_line <- function() {
+  geom_hline(
+    yintercept = 0,
+    linewidth = 0.25,
+    colour = "grey75",
+    inherit.aes = FALSE
+  )
+}
+
+wrap_caption <- function(text, width) {
+  parts <- strsplit(text, "\n", fixed = TRUE)[[1]]
+  lines <- unlist(lapply(parts, function(part) strwrap(part, width = width)))
+  paste(lines, collapse = "\n")
+}
+
+# Grouped series share one legend. Residence panels use the URESMC order.
+plot_groups <- function(data, title, y_label, caption, facet,
+                         caption_width = 145, scales = "fixed") {
+  p <- ggplot(data, aes(date, value, colour = series)) +
+    zero_line() +
+    mark_transition() +
+    geom_line(linewidth = 0.4, na.rm = TRUE) +
+    scale_colour_manual(values = series_colours, breaks = names(series_colours)) +
+    x_scale() +
+    labs(
+      title = title, x = NULL, y = y_label, colour = NULL,
+      caption = wrap_caption(caption, caption_width)
+    ) +
+    base_theme()
+  if (facet) {
+    p <- p + facet_wrap(
+      vars(residence),
+      ncol = 5,
+      scales = scales,
+      labeller = labeller(residence = label_wrap_gen(18))
+    )
+  }
+  p
+}
+
+plot_one <- function(data, column, title, y_label, caption) {
+  ggplot(data, aes(date, .data[[column]])) +
+    zero_line() +
+    mark_transition() +
+    geom_line(linewidth = 0.35, colour = "#1f4e79", na.rm = TRUE) +
+    facet_wrap(
+      vars(residence),
+      ncol = 5,
+      labeller = labeller(residence = label_wrap_gen(18))
+    ) +
+    x_scale() +
+    labs(
+      title = title, x = NULL, y = y_label,
+      caption = wrap_caption(caption, 145)
+    ) +
+    base_theme()
+}
+
+to_long <- function(data, columns, labels) {
+  data %>%
+    select(any_of(c("residence", "date")), all_of(columns)) %>%
+    pivot_longer(
+      all_of(columns),
+      names_to = "series",
+      values_to = "value"
+    ) %>%
+    mutate(series = factor(unname(labels[series]), levels = names(series_colours)))
+}
+
+ratio_labels <- c(
+  ratio_migrant = "Migrant",
+  ratio_eu = "EU",
+  ratio_non_eu = "Non-EU"
+)
 ```
 
-## Including Plots
+## Ratio levels by residence
 
-You can also embed plots, for example:
+Each residence has its own vertical scale, so a high-ratio area does not flatten the others. The ratio is migrants per UK-born person.
 
-```{r pressure, echo=FALSE}
-plot(pressure)
+```{r ratio-levels, fig.width=13, fig.height=8.5}
+plot_groups(
+  to_long(reg, names(ratio_labels), ratio_labels),
+  "Migrant ratio by residence",
+  "Ratio to UK-born",
+  paste(
+    transition_caption,
+    "Each residence has its own vertical scale."
+  ),
+  facet = TRUE,
+  scales = "free_y"
+)
 ```
 
-Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+## Quarter-to-quarter ratio changes by residence
+
+The migrant-ratio change uses one shared vertical scale. The EU and non-EU changes use a separate scale in each residence, because the two series are drawn together and a shared scale would hide the smaller moves.
+
+```{r ratio-change-migrant, fig.width=13, fig.height=8.5}
+plot_one(
+  reg,
+  "d_qoq_ratio_migrant",
+  "Quarter-to-quarter change in the migrant ratio",
+  "Change in ratio",
+  transition_caption
+)
+```
+
+```{r ratio-change-eu-non-eu, fig.width=13, fig.height=8.5}
+eu_non_eu_changes <- c(
+  d_qoq_ratio_eu = "EU",
+  d_qoq_ratio_non_eu = "Non-EU"
+)
+plot_groups(
+  to_long(reg, names(eu_non_eu_changes), eu_non_eu_changes),
+  "Quarter-to-quarter change in the EU and non-EU ratios",
+  "Change in ratio",
+  paste(
+    transition_caption,
+    "Each residence has its own vertical scale."
+  ),
+  facet = TRUE,
+  scales = "free_y"
+)
+```
+
+## Migration exposure
+
+The baseline is the 2017–2019 pooled stock: the sum of the birthplace count divided by the sum of the UK-born count, inside the residence. It is the `baseline_ratio_*` column, not the average of the quarterly ratios.
+
+```{r exposure-baseline}
+baseline <- reg %>%
+  group_by(residence) %>%
+  summarise(
+    baseline_ratio_migrant = unique(baseline_ratio_migrant),
+    baseline_ratio_eu = unique(baseline_ratio_eu),
+    baseline_ratio_non_eu = unique(baseline_ratio_non_eu),
+    n_values = n_distinct(baseline_ratio_eu),
+    .groups = "drop"
+  )
+if (nrow(baseline) != 20L || any(baseline$n_values != 1L)) {
+  stop("2017-2019 EU baseline is not one value per residence.", call. = FALSE)
+}
+eu_median <- median(baseline$baseline_ratio_eu)
+if (any(baseline$baseline_ratio_eu == eu_median)) {
+  stop("2017-2019 EU baseline ties the median, so the 10/10 split is undefined.", call. = FALSE)
+}
+baseline <- baseline %>%
+  mutate(
+    eu_exposure_group = if_else(
+      baseline_ratio_eu > eu_median, "Above median", "Below median"
+    )
+  )
+if (any(table(baseline$eu_exposure_group) != 10L)) {
+  stop("EU exposure split is not 10 residences on each side of the median.", call. = FALSE)
+}
+eu_median
+```
+
+### EU baseline, 2017–2019
+
+```{r exposure-eu-bars, fig.width=8, fig.height=7.2}
+ggplot(
+  baseline,
+  aes(reorder(residence, baseline_ratio_eu), baseline_ratio_eu)
+) +
+  geom_col(fill = "#0072B2", width = 0.75) +
+  coord_flip() +
+  labs(
+    title = "EU migrant exposure, 2017–2019",
+    x = NULL,
+    y = "EU migrants per UK-born person",
+    caption = wrap_caption(paste(
+      "Each bar is the residence's 2017–2019 pooled EU count divided by its pooled UK-born count.",
+      "It is the baseline_ratio_eu column, not the average of quarterly ratios.",
+      "This is the baseline in the shift-share instrument. It is fixed for every later quarter.",
+      "The ratio is migrants per UK-born person, not a share of the total population."
+    ), 100)
+  ) +
+  base_theme() +
+  theme(legend.position = "none")
+```
+
+### EU and non-EU baselines, 2017–2019
+
+Residences stay in the EU-ratio order from the previous chart.
+
+```{r exposure-eu-non-eu-bars, fig.width=8, fig.height=7.2}
+baseline_long <- baseline %>%
+  transmute(
+    residence,
+    EU = baseline_ratio_eu,
+    `Non-EU` = baseline_ratio_non_eu
+  ) %>%
+  pivot_longer(-residence, names_to = "series", values_to = "ratio") %>%
+  mutate(
+    residence = factor(
+      residence,
+      levels = levels(reorder(baseline$residence, baseline$baseline_ratio_eu))
+    ),
+    series = factor(series, levels = c("EU", "Non-EU"))
+  )
+
+ggplot(baseline_long, aes(residence, ratio, fill = series)) +
+  geom_col(position = position_dodge(width = 0.75), width = 0.7) +
+  coord_flip() +
+  scale_fill_manual(values = c("EU" = "#0072B2", "Non-EU" = "#D55E00")) +
+  labs(
+    title = "EU and non-EU exposure, 2017–2019",
+    x = NULL,
+    y = "Migrants per UK-born person",
+    fill = NULL,
+    caption = wrap_caption(paste(
+      "Both ratios use the residence's pooled 2017–2019 UK-born count as the denominator.",
+      "Residences are ordered by the EU ratio, from lowest at the bottom to highest at the top.",
+      "The 2010–2015 stock is not shown."
+    ), 100)
+  ) +
+  base_theme()
+```
+
+### Baseline against the change from 2021 to 2025
+
+2025 is the last complete calendar year. A pooled ratio sums the four quarterly counts and divides by the summed UK-born count. 2026 is omitted because the file has only Q1 and Q2.
+
+```{r exposure-change-data}
+pool_year <- function(data, year_id, numerator) {
+  piece <- data %>%
+    filter(year == year_id, quarter %in% 1:4) %>%
+    group_by(residence) %>%
+    summarise(
+      n_q = n(),
+      numerator = sum(.data[[numerator]]),
+      native = sum(native),
+      .groups = "drop"
+    )
+  if (nrow(piece) != 20L || any(piece$n_q != 4L) || any(!is.finite(piece$native) | piece$native <= 0)) {
+    stop("Cannot pool ", year_id, " ", numerator, " counts for every residence.", call. = FALSE)
+  }
+  piece %>%
+    transmute(
+      residence,
+      ratio = numerator / native
+    )
+}
+
+exposure_change <- function(numerator, baseline_column, series_name) {
+  start <- pool_year(reg, 2021L, numerator) %>% rename(ratio_2021 = ratio)
+  end <- pool_year(reg, 2025L, numerator) %>% rename(ratio_2025 = ratio)
+  start %>%
+    inner_join(end, by = "residence") %>%
+    inner_join(
+      baseline %>% transmute(residence, baseline = .data[[baseline_column]]),
+      by = "residence"
+    ) %>%
+    mutate(
+      change = ratio_2025 - ratio_2021,
+      series = series_name,
+      residence_label = as.character(residence)
+    )
+}
+
+exposure_points <- bind_rows(
+  exposure_change("eu", "baseline_ratio_eu", "EU"),
+  exposure_change("non_eu", "baseline_ratio_non_eu", "Non-EU")
+)
+if (nrow(exposure_points) != 40L || any(!is.finite(exposure_points$change))) {
+  stop("Post-2021 exposure changes are incomplete.", call. = FALSE)
+}
+
+exposure_fit <- exposure_points %>%
+  group_by(series) %>%
+  summarise(
+    n = n(),
+    correlation = cor(baseline, change),
+    slope = coef(lm(change ~ baseline))[2],
+    .groups = "drop"
+  )
+
+# Labels use distances on each series' own 0-1 scales.
+label_exposure_points <- function(points, extra_labels = character()) {
+  points %>%
+    group_by(series) %>%
+    mutate(
+      x_scaled = (baseline - min(baseline)) / (max(baseline) - min(baseline)),
+      y_scaled = (change - min(change)) / (max(change) - min(change))
+    ) %>%
+    group_modify(function(piece, key) {
+      nearest <- vapply(seq_len(nrow(piece)), function(i) {
+        distance <- sqrt(
+          (piece$x_scaled[i] - piece$x_scaled)^2 +
+            (piece$y_scaled[i] - piece$y_scaled)^2
+        )
+        distance[i] <- Inf
+        min(distance)
+      }, numeric(1))
+      piece %>%
+        mutate(
+          nearest = nearest,
+          label_this = residence_label %in% c(
+            "Inner London", "Outer London", extra_labels
+          ) |
+            baseline %in% c(min(baseline), max(baseline)) |
+            change %in% c(min(change), max(change)) |
+            nearest > 0.22,
+          hjust = if_else(x_scaled > 0.72, 1.08, -0.08),
+          vjust = if_else(y_scaled > 0.78, 1.45, -0.55)
+        )
+    }) %>%
+    ungroup() %>%
+    filter(label_this)
+}
+
+exposure_labels <- label_exposure_points(exposure_points)
+exposure_fit
+```
+
+```{r exposure-eu-non-eu-scatter, fig.width=10, fig.height=6.4}
+exposure_caption <- paste(
+  "Each point is one residence. The vertical axis is the 2025 pooled migrant-to-UK-born ratio minus the 2021 pooled ratio.",
+  "A pooled ratio sums the four quarterly counts and divides by the summed UK-born count. It is not the average of the four quarterly ratios.",
+  "2026 is omitted because the file has only Q1 and Q2.",
+  "The line is a descriptive least-squares fit.",
+  sprintf(
+    "EU correlation %.2f. Non-EU correlation %.2f. Twenty residences in each panel.",
+    exposure_fit$correlation[exposure_fit$series == "EU"],
+    exposure_fit$correlation[exposure_fit$series == "Non-EU"]
+  ),
+  "The association is not a causal effect of the 2017–2019 baseline.",
+  "Labels mark Inner London, Outer London, the extreme values, and residences separated from the others."
+)
+
+ggplot(exposure_points, aes(baseline, change, colour = series)) +
+  geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey75") +
+  geom_point(size = 2) +
+  geom_smooth(method = "lm", formula = y ~ x, se = FALSE, linewidth = 0.6, colour = "grey20") +
+  geom_text(
+    data = exposure_labels,
+    aes(label = residence_label, hjust = hjust, vjust = vjust),
+    size = 2.5, colour = "grey15", show.legend = FALSE
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.08, 0.16))) +
+  scale_y_continuous(expand = expansion(mult = c(0.16, 0.14))) +
+  facet_wrap(vars(series), scales = "free") +
+  scale_colour_manual(values = c("EU" = "#0072B2", "Non-EU" = "#D55E00"), guide = "none") +
+  labs(
+    title = "2017–2019 exposure and the change from 2021 to 2025",
+    x = "2017–2019 migrants per UK-born person",
+    y = "Change in the ratio, 2025 minus 2021",
+    caption = wrap_caption(exposure_caption, 110)
+  ) +
+  base_theme()
+```
+
+### Migrant baseline against the change from 2021 to 2025
+
+The migrant count is EU-born plus non-EU-born. Both components use the same UK-born denominator, so each migrant point is the sum of that residence's EU and non-EU points.
+
+```{r exposure-migrant-scatter, fig.width=7.5, fig.height=6.8}
+migrant_points <- exposure_change("migrant", "baseline_ratio_migrant", "Migrant")
+if (nrow(migrant_points) != 20L || any(!is.finite(migrant_points$change))) {
+  stop("Post-2021 migrant exposure changes are incomplete.", call. = FALSE)
+}
+component_sum <- exposure_points %>%
+  group_by(residence) %>%
+  summarise(
+    baseline_sum = sum(baseline),
+    change_sum = sum(change),
+    .groups = "drop"
+  )
+migrant_check <- migrant_points %>%
+  inner_join(component_sum, by = "residence")
+baseline_scale <- pmax(
+  1, abs(migrant_check$baseline), abs(migrant_check$baseline_sum)
+)
+change_scale <- pmax(
+  1, abs(migrant_check$change), abs(migrant_check$change_sum)
+)
+if (nrow(migrant_check) != 20L ||
+    any(abs(migrant_check$baseline - migrant_check$baseline_sum) > 1e-8 * baseline_scale) ||
+    any(abs(migrant_check$change - migrant_check$change_sum) > 1e-8 * change_scale)) {
+  stop(
+    "Migrant baseline or 2025-minus-2021 change is not the EU plus non-EU value.",
+    call. = FALSE
+  )
+}
+migrant_fit <- migrant_points %>%
+  summarise(
+    n = n(),
+    correlation = cor(baseline, change)
+  )
+if (migrant_fit$n != 20L || !is.finite(migrant_fit$correlation)) {
+  stop("Migrant exposure correlation is not defined for 20 residences.", call. = FALSE)
+}
+
+# West Midlands sits between the main group and London, so the shared
+# distance rule would leave it unnamed.
+migrant_labels <- label_exposure_points(
+  migrant_points,
+  extra_labels = "West Midlands (met county)"
+)
+migrant_caption <- paste(
+  "Each point is one residence. The vertical axis is the 2025 pooled migrant-to-UK-born ratio minus the 2021 pooled ratio.",
+  "A pooled ratio sums the four quarterly counts and divides by the summed UK-born count. It is not the average of the four quarterly ratios.",
+  "The numerator is EU-born plus non-EU-born.",
+  "2026 is omitted because the file has only Q1 and Q2.",
+  "The line is a descriptive least-squares fit.",
+  sprintf("Correlation %.2f. Twenty residences.", migrant_fit$correlation),
+  "The association is not a causal effect of the 2017–2019 baseline.",
+  "Labels mark Inner London, Outer London, West Midlands (met county), the extreme values, and residences separated from the others."
+)
+
+ggplot(migrant_points, aes(baseline, change)) +
+  geom_hline(yintercept = 0, linewidth = 0.25, colour = "grey75") +
+  geom_point(size = 2, colour = series_colours[["Migrant"]]) +
+  geom_smooth(
+    method = "lm", formula = y ~ x, se = FALSE,
+    linewidth = 0.6, colour = "grey20"
+  ) +
+  geom_text(
+    data = migrant_labels,
+    aes(label = residence_label, hjust = hjust, vjust = vjust),
+    size = 2.5, colour = "grey15", show.legend = FALSE
+  ) +
+  scale_x_continuous(expand = expansion(mult = c(0.08, 0.16))) +
+  scale_y_continuous(expand = expansion(mult = c(0.16, 0.14))) +
+  labs(
+    title = "2017–2019 migrant exposure and the change from 2021 to 2025",
+    x = "2017–2019 migrants per UK-born person",
+    y = "Change in the migrant ratio, 2025 minus 2021",
+    caption = wrap_caption(migrant_caption, 100)
+  ) +
+  base_theme()
+```

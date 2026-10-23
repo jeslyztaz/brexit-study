@@ -1,7 +1,8 @@
 # Descriptive charts for the residence-quarter regression file.
 #
 # Levels of the migrant, EU, and non-EU ratios, their quarter-to-quarter
-# changes, the quarter-to-quarter change in UK-born mean log hourly pay,
+# changes, the quarter-to-quarter percent change in the UK-born stock,
+# the quarter-to-quarter change in UK-born mean log hourly pay,
 # and the quarter-to-quarter changes in the seven UK-born controls.
 # The window is the whole file, 2006 Q1 through 2026 Q2.
 #
@@ -105,6 +106,40 @@ if (min(reg$year) != 2006L || max(reg$year) < 2026L) {
   stop("Expected the file to run from 2006 through 2026.", call. = FALSE)
 }
 
+# Percent change in the UK-born stock, the denominator of the migrant
+# ratio. The previous quarter is matched on the calendar, as in
+# difference_from(). A person change is not comparable across residences:
+# the largest stock is about ten times the smallest. This column is for
+# the chart. It is not written back to the regression file.
+native_index <- reg$year * 4L + (reg$quarter - 1L) - 1L
+native_keys <- tibble(
+  residence = as.character(reg$residence),
+  .row = seq_len(nrow(reg)),
+  lag_year = native_index %/% 4L,
+  lag_quarter = as.integer(native_index %% 4L) + 1L
+)
+native_past <- tibble(
+  residence = as.character(reg$residence),
+  year = reg$year,
+  quarter = reg$quarter,
+  native_lag = reg$native
+)
+native_joined <- left_join(
+  native_keys,
+  native_past,
+  by = c("residence", "lag_year" = "year", "lag_quarter" = "quarter")
+)
+native_joined <- native_joined %>% arrange(.row)
+if (nrow(native_joined) != nrow(reg) || any(native_joined$.row != seq_len(nrow(reg)))) {
+  stop("UK-born lag join changed the rows.", call. = FALSE)
+}
+bad_lag <- is.finite(native_joined$native_lag) & native_joined$native_lag <= 0
+if (any(bad_lag) || any(!is.finite(reg$native) | reg$native <= 0)) {
+  stop("UK-born stock is missing or not positive.", call. = FALSE)
+}
+reg$d_qoq_native_pct <- 100 *
+  (reg$native - native_joined$native_lag) / native_joined$native_lag
+
 # A quarter-to-quarter change is missing in 2006 Q1 because there is no
 # earlier quarter. A gap later than that would be joined if those rows
 # were dropped, so stop instead of plotting across it.
@@ -128,6 +163,7 @@ change_columns <- c(
   "d_qoq_national_ratio_migrant", "d_qoq_national_ratio_eu",
   "d_qoq_national_ratio_non_eu",
   "d_qoq_mean_log_hourpay_uk_born",
+  "d_qoq_native_pct",
   "d_qoq_mean_age_uk_born", "d_qoq_share_uk_degree", "d_qoq_share_uk_low_qual",
   "d_qoq_share_uk_asian", "d_qoq_share_uk_black", "d_qoq_share_uk_chinese",
   "d_qoq_share_uk_eth_other"
@@ -382,6 +418,25 @@ save_figure(
   "d_qoq_ratio_migrant_by_residence.png",
   facet_width,
   facet_height,
+  "migration/changes"
+)
+
+save_figure(
+  plot_one(
+    reg,
+    "d_qoq_native_pct",
+    "Quarter-to-quarter percent change in the UK-born stock",
+    "Percent change",
+    paste(
+      transition_caption,
+      "The UK-born stock is the denominator of the migrant ratio.",
+      "Change is 100 times this quarter minus the previous quarter, divided by the previous quarter.",
+      "Residences share one vertical scale."
+    )
+  ),
+  "d_qoq_native_pct_by_residence.png",
+  facet_width,
+  9,
   "migration/changes"
 )
 
@@ -1389,7 +1444,7 @@ save_figure(
   "migration/changes"
 )
 
-if (n_figures != 27L) {
-  stop("Expected 27 quarterly charts, wrote ", n_figures, ".", call. = FALSE)
+if (n_figures != 28L) {
+  stop("Expected 28 quarterly charts, wrote ", n_figures, ".", call. = FALSE)
 }
 message("Wrote ", n_figures, " quarterly descriptive charts.")
