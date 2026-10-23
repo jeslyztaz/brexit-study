@@ -44,7 +44,7 @@ run_guarded({
   if ("quarter" %in% names(raw)) {
     stop("Annual regression file has a quarter column.", call. = FALSE)
   }
-  window <- raw %>% filter(year > 2015)
+  window <- raw %>% filter(year > 2020)
   if (nrow(window) == 0L) {
     stop("No residence-years with year > 2015.", call. = FALSE)
   }

@@ -31,7 +31,7 @@ if (!file.exists(data_file)) {
 }
 
 reg <- read_csv(data_file, show_col_types = FALSE) %>%
-  filter(year > 2015) %>%
+  filter(year > 2020) %>%
   filter(if_all(
     all_of(c(
       outcome, "residence", "period",

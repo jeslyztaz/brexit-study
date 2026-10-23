@@ -1,19 +1,19 @@
                                                          none                                FE                       + ethnicity                       + education                             + age
 Dependent Var.:             d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born
                                                                                                                                                                                                      
-Constant                                   0.0434*** (0.0010)                                                                                                                                        
-d_annual_ratio_migrant                       -0.0125 (0.1236)                  -0.2007 (0.1648)                  -0.2159 (0.1776)                  -0.2085 (0.1776)                  -0.2044 (0.1748)
-d_annual_share_uk_asian                                                                                          -0.1033 (0.2181)                  -0.0975 (0.2138)                  -0.0295 (0.2408)
-d_annual_share_uk_black                                                                                          -0.2982 (0.5097)                  -0.3084 (0.4963)                  -0.2602 (0.5022)
-d_annual_share_uk_chinese                                                                                          -1.922 (1.602)                    -1.846 (1.673)                    -1.592 (1.680)
-d_annual_share_uk_eth_other                                                                                      0.9957. (0.5266)                   0.8563 (0.5075)                  0.8846. (0.5078)
-d_annual_share_uk_degree                                                                                                                            0.1246 (0.1583)                   0.0829 (0.1679)
-d_annual_share_uk_low_qual                                                                                                                          0.1141 (0.1109)                   0.1054 (0.1114)
-d_annual_mean_age_uk_born                                                                                                                                                             0.0142 (0.0101)
-n_obs                                                     200                               200                               200                               200                               200
+Constant                                   0.0607*** (0.0020)                                                                                                                                        
+d_annual_ratio_migrant                      -0.3691* (0.1363)                -0.4983** (0.1607)                -0.5746** (0.1623)               -0.5758*** (0.1477)               -0.5714*** (0.1381)
+d_annual_share_uk_asian                                                                                           0.1431 (0.2614)                   0.1587 (0.2372)                   0.2041 (0.2533)
+d_annual_share_uk_black                                                                                           0.1796 (0.3831)                   0.1605 (0.3754)                   0.1501 (0.3811)
+d_annual_share_uk_chinese                                                                                          -1.310 (1.560)                    -1.186 (1.739)                    -1.234 (1.894)
+d_annual_share_uk_eth_other                                                                                       1.258. (0.6359)                   0.9662 (0.7326)                   0.9304 (0.6946)
+d_annual_share_uk_degree                                                                                                                            0.2860 (0.2123)                   0.2753 (0.2154)
+d_annual_share_uk_low_qual                                                                                                                          0.1697 (0.1965)                   0.1751 (0.1936)
+d_annual_mean_age_uk_born                                                                                                                                                             0.0078 (0.0125)
+n_obs                                                     100                               100                               100                               100                               100
 n_clusters                                                 20                                20                                20                                20                                20
 first_stage_f                                                                                                                                                                                        
-hausman_p                                             0.04696                             0.702                            0.8112                            0.7948                            0.6838
+hausman_p                                               0.275                            0.9125                             0.814                            0.8281                            0.9217
 Fixed-Effects:                 ------------------------------    ------------------------------    ------------------------------    ------------------------------    ------------------------------
 residence                                                  No                               Yes                               Yes                               Yes                               Yes
 period                                                     No                               Yes                               Yes                               Yes                               Yes

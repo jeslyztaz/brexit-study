@@ -1,21 +1,21 @@
                                                          none                                FE                       + ethnicity                       + education                             + age
 Dependent Var.:             d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born
                                                                                                                                                                                                      
-Constant                                   0.0435*** (0.0012)                                                                                                                                        
-d_annual_ratio_eu                            -0.0022 (0.2818)                   0.0817 (0.3425)                   0.1401 (0.3358)                   0.1584 (0.3319)                   0.1620 (0.3184)
-d_annual_ratio_non_eu                        -0.0167 (0.1492)                 -0.3115. (0.1748)                 -0.3658. (0.1842)                 -0.3616. (0.1876)                 -0.3573. (0.1867)
-d_annual_share_uk_asian                                                                                          -0.0591 (0.2277)                  -0.0529 (0.2199)                   0.0150 (0.2440)
-d_annual_share_uk_black                                                                                          -0.3062 (0.5230)                  -0.3162 (0.5140)                  -0.2681 (0.5213)
-d_annual_share_uk_chinese                                                                                          -2.593 (1.548)                    -2.528 (1.645)                    -2.274 (1.636)
-d_annual_share_uk_eth_other                                                                                       1.083. (0.5381)                  0.9259. (0.5325)                  0.9541. (0.5290)
-d_annual_share_uk_degree                                                                                                                            0.1470 (0.1614)                   0.1054 (0.1734)
-d_annual_share_uk_low_qual                                                                                                                          0.1274 (0.1042)                   0.1188 (0.1069)
-d_annual_mean_age_uk_born                                                                                                                                                             0.0142 (0.0098)
-n_obs                                                     200                               200                               200                               200                               200
+Constant                                   0.0630*** (0.0027)                                                                                                                                        
+d_annual_ratio_eu                             0.2368 (0.4262)                  -0.0108 (0.5525)                   0.0280 (0.5525)                   0.0701 (0.5262)                   0.1042 (0.5274)
+d_annual_ratio_non_eu                      -0.5707** (0.1906)                -0.6491** (0.2170)                -0.7571** (0.2105)                -0.7683** (0.2053)               -0.7711*** (0.1943)
+d_annual_share_uk_asian                                                                                           0.1074 (0.2557)                   0.1289 (0.2243)                   0.1864 (0.2365)
+d_annual_share_uk_black                                                                                          -0.0351 (0.4655)                  -0.0798 (0.4523)                  -0.1037 (0.4651)
+d_annual_share_uk_chinese                                                                                          -2.050 (1.635)                    -1.863 (1.905)                    -1.954 (2.115)
+d_annual_share_uk_eth_other                                                                                       1.368* (0.6417)                    1.011 (0.7345)                   0.9671 (0.6814)
+d_annual_share_uk_degree                                                                                                                            0.3335 (0.2451)                   0.3218 (0.2489)
+d_annual_share_uk_low_qual                                                                                                                          0.2246 (0.2062)                   0.2340 (0.2044)
+d_annual_mean_age_uk_born                                                                                                                                                             0.0101 (0.0120)
+n_obs                                                     100                               100                               100                               100                               100
 n_clusters                                                 20                                20                                20                                20                                20
 first_stage_f_eu                                                                                                                                                                                     
 first_stage_f_non_eu                                                                                                                                                                                 
-hausman_p                                             0.01758                            0.8851                            0.9016                            0.8959                            0.8395
+hausman_p                                              0.3745                            0.5929                            0.7497                            0.7873                            0.8267
 Fixed-Effects:                 ------------------------------    ------------------------------    ------------------------------    ------------------------------    ------------------------------
 residence                                                  No                               Yes                               Yes                               Yes                               Yes
 period                                                     No                               Yes                               Yes                               Yes                               Yes
