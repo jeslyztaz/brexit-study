@@ -1,0 +1,56 @@
+check,required,n,max_rel_gap,limit,passed,note
+annual files have no quarter column,TRUE,1,0,0,TRUE,The annual panel and regression file are residence-year.
+one row per residence-year,TRUE,400,0,0,TRUE,Duplicates are counted as a failure.
+URESMC residence set,TRUE,20,0,0,TRUE,"Twenty residence labels, the same set on both panels."
+annual years are the complete calendar years,TRUE,20,0,0,TRUE,"Complete years: 2006, 2007, 2008, 2009, 2010, 2011, 2012, 2013, 2014, 2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022, 2023, 2024, 2025. Excluded quarterly years: 2026."
+twenty residences in every annual year,TRUE,20,0,0,TRUE,
+annual pop equals the mean of quarterly stocks,TRUE,400,0,1e-6,TRUE,Quarterly stocks are not summed.
+annual pop_uk_born equals the mean of quarterly stocks,TRUE,400,0,1e-6,TRUE,Quarterly stocks are not summed.
+annual pop_eu_born equals the mean of quarterly stocks,TRUE,400,0,1e-6,TRUE,Quarterly stocks are not summed.
+annual pop_non_eu_born equals the mean of quarterly stocks,TRUE,400,0,1e-6,TRUE,Quarterly stocks are not summed.
+annual pop_birthplace_unknown equals the mean of quarterly stocks,TRUE,400,0,1e-6,TRUE,Quarterly stocks are not summed.
+annual pop_pay equals the mean of quarterly stocks,TRUE,400,0,1e-6,TRUE,Quarterly stocks are not summed.
+annual population is not the sum of quarterly stocks,TRUE,400,0,0,TRUE,A summed stock is about four times the annual population.
+annual person counts equal the sum of quarterly counts,TRUE,400,0,0,TRUE,n and n_pay_uk_born count person-quarters. They are not divided by 4.
+annual birthplace totals add up to pop,TRUE,400,0,1e-6,TRUE,Unknown birthplace stays in pop and out of the three birthplace groups.
+annual UK birth share uses pooled known-birthplace weights,TRUE,400,1.1102230246251565e-16,1e-6,TRUE,"This is the ratio of summed quarterly stocks, not the average of quarterly shares."
+within-build quarterly sufficient statistics,TRUE,20,5.427933872451808e-15,1e-6,TRUE,"Maximum of max_rel_pop, max_rel_pop_uk, max_rel_pop_eu, max_rel_pop_non_eu, max_rel_pop_unknown, max_rel_pop_pay, max_rel_mean_age_uk, max_rel_age_weight_vs_pop_uk, max_rel_mean_log_hourpay_uk, max_rel_share_eth_indian in aggregation_checks.csv. Wages are income-weighted pooled means."
+gap versus the unweighted average of quarterly UK-born log wages,FALSE,400,0.0052042101905517705,NA,TRUE,Recorded only. The annual wage pools income weights and is not this average.
+annual national migrant ratio equals pooled quarterly counts,TRUE,20,2.7755575615628914e-17,1e-5,TRUE,The average of the four quarterly stocks cancels in the ratio.
+gap versus the unweighted mean of quarterly national migrant ratios,FALSE,20,1.578927702094446e-4,NA,TRUE,Recorded only. The annual ratio does not average quarterly ratios.
+annual national eu ratio equals pooled quarterly counts,TRUE,20,6.938893903907228e-18,1e-5,TRUE,The average of the four quarterly stocks cancels in the ratio.
+gap versus the unweighted mean of quarterly national eu ratios,FALSE,20,8.853455861281001e-5,NA,TRUE,Recorded only. The annual ratio does not average quarterly ratios.
+annual national non_eu ratio equals pooled quarterly counts,TRUE,20,2.7755575615628914e-17,1e-5,TRUE,The average of the four quarterly stocks cancels in the ratio.
+gap versus the unweighted mean of quarterly national non_eu ratios,FALSE,20,6.935821159664846e-5,NA,TRUE,Recorded only. The annual ratio does not average quarterly ratios.
+baseline ratio is constant within residence,TRUE,20,0,0,TRUE,The same pooled baseline is repeated on every period.
+annual baseline_ratio_migrant matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_ratio_eu matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_ratio_non_eu matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_ratio_migrant_2010_2015 matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_ratio_eu_2010_2015 matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_ratio_non_eu_2010_2015 matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_national_ratio_migrant matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_national_ratio_eu matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_national_ratio_non_eu matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_national_ratio_migrant_2010_2015 matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_national_ratio_eu_2010_2015 matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+annual baseline_national_ratio_non_eu_2010_2015 matches the quarterly pooled baseline,TRUE,20,0,1e-5,TRUE,Both are summed stocks over the same window. Post-window years are not in the sum.
+d_annual_ratio_migrant is the previous calendar year,TRUE,400,1.1449174941446927e-16,1e-6,TRUE,level[t] - level[t - 1]. A missing previous year stays missing.
+shift_share_annual_migrant is baseline times the leave-one-out change,TRUE,400,9.974659986866641e-18,1e-6,TRUE,"Leave-one-out uses national counts minus the residence, then the ratio."
+d_annual_ratio_eu is the previous calendar year,TRUE,400,3.729655473350135e-17,1e-6,TRUE,level[t] - level[t - 1]. A missing previous year stays missing.
+shift_share_annual_eu is baseline times the leave-one-out change,TRUE,400,9.324138683375338e-18,1e-6,TRUE,"Leave-one-out uses national counts minus the residence, then the ratio."
+d_annual_ratio_non_eu is the previous calendar year,TRUE,400,6.245004513516506e-17,1e-6,TRUE,level[t] - level[t - 1]. A missing previous year stays missing.
+shift_share_annual_non_eu is baseline times the leave-one-out change,TRUE,400,9.75781955236954e-18,1e-6,TRUE,"Leave-one-out uses national counts minus the residence, then the ratio."
+d_annual_ratio_migrant_l1 is the previous year's one-year change,TRUE,400,0,1e-6,TRUE,This is the annual counterpart of d_yoy_ratio_migrant_l4. It is not d_annual itself.
+shift_share_annual_migrant_l1 is the previous year's instrument,TRUE,400,0,1e-6,TRUE,Stored analogue of shift_share_yoy_migrant_l4. Not used in the annual regression.
+baseline_ratio_migrant uses only 2017 through 2019,TRUE,20,2.7755575615628914e-17,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
+baseline_ratio_eu uses only 2017 through 2019,TRUE,20,6.938893903907228e-18,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
+baseline_ratio_non_eu uses only 2017 through 2019,TRUE,20,1.3877787807814457e-17,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
+baseline_ratio_migrant_2010_2015 uses only 2010 through 2015,TRUE,20,1.3877787807814457e-17,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
+baseline_ratio_eu_2010_2015 uses only 2010 through 2015,TRUE,20,6.938893903907228e-18,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
+baseline_ratio_non_eu_2010_2015 uses only 2010 through 2015,TRUE,20,1.3877787807814457e-17,1e-6,TRUE,Recomputed from annual stocks inside the window. Later years are not used.
+annual period is the calendar year,TRUE,400,0,0,TRUE,Year fixed effects use this column. It is not a quarter label.
+annual regression sample is year > 2015 complete cases,TRUE,30,0,0,TRUE,200 residence-years and 20 residences. n_obs and n_clusters match.
+annual regression endogenous variable is the contemporaneous change,TRUE,30,0,0,TRUE,d_annual_*_l1 is not a regressor.
+annual formulas use year fixed effects and residence clusters,TRUE,20,0,0,TRUE,Steps 1-4 use residence + period. The Jaeger lag is not in the formula.
+quarterly and annual specifications align by step,TRUE,30,0,0,TRUE,"Residence, ethnicity, education, and age flags match. Quarter FE matches year FE."

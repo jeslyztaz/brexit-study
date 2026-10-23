@@ -1,0 +1,123 @@
+Comparison: quarterly main specification vs annual robustness check.
+The quarterly estimates are the main specification. The annual estimates are a robustness check.
+
+step 0 | eu_non_eu | 2SLS | d_annual_ratio_eu
+  quarterly: coef 92.76  se 470.7  p 0.8459  n 840  clusters 20  first-stage F 11.64  hausman p 0.0006464
+  annual:    coef -1.709  se 0.5667  p 0.007097  n 200  clusters 20  first-stage F 16.41  hausman p 0.01758
+
+step 0 | eu_non_eu | 2SLS | d_annual_ratio_non_eu
+  quarterly: coef -80.2  se 425  p 0.8523  n 840  clusters 20  first-stage F 5.998  hausman p 0.0006464
+  annual:    coef 0.8945  se 0.3199  p 0.01152  n 200  clusters 20  first-stage F 23.19  hausman p 0.01758
+
+step 0 | eu_non_eu | OLS | d_annual_ratio_eu
+  quarterly: coef 0.119  se 0.5268  p 0.8237  n 840  clusters 20  first-stage F   hausman p 0.0006464
+  annual:    coef -0.002245  se 0.2818  p 0.9937  n 200  clusters 20  first-stage F   hausman p 0.01758
+
+step 0 | eu_non_eu | OLS | d_annual_ratio_non_eu
+  quarterly: coef -0.04138  se 0.1385  p 0.7684  n 840  clusters 20  first-stage F   hausman p 0.0006464
+  annual:    coef -0.01673  se 0.1492  p 0.9119  n 200  clusters 20  first-stage F   hausman p 0.01758
+
+step 0 | pooled | 2SLS | d_annual_ratio_migrant
+  quarterly: coef 1.717  se 0.7084  p 0.02549  n 840  clusters 20  first-stage F 13.97  hausman p 0.04068
+  annual:    coef 0.3376  se 0.1257  p 0.01464  n 200  clusters 20  first-stage F 49.81  hausman p 0.04696
+
+step 0 | pooled | OLS | d_annual_ratio_migrant
+  quarterly: coef 0.00797  se 0.08657  p 0.9276  n 840  clusters 20  first-stage F   hausman p 0.04068
+  annual:    coef -0.01249  se 0.1236  p 0.9206  n 200  clusters 20  first-stage F   hausman p 0.04696
+
+step 1 | eu_non_eu | 2SLS | d_annual_ratio_eu
+  quarterly: coef -2.546  se 2.652  p 0.3491  n 840  clusters 20  first-stage F 4.223  hausman p 0.02368
+  annual:    coef 0.1499  se 2.857  p 0.9587  n 200  clusters 20  first-stage F 0.8775  hausman p 0.8851
+
+step 1 | eu_non_eu | 2SLS | d_annual_ratio_non_eu
+  quarterly: coef -2.828  se 1.014  p 0.0117  n 840  clusters 20  first-stage F 13.19  hausman p 0.02368
+  annual:    coef -0.1615  se 0.6071  p 0.793  n 200  clusters 20  first-stage F 13.19  hausman p 0.8851
+
+step 1 | eu_non_eu | OLS | d_annual_ratio_eu
+  quarterly: coef 0.1741  se 0.5303  p 0.7464  n 840  clusters 20  first-stage F   hausman p 0.02368
+  annual:    coef 0.08165  se 0.3425  p 0.8141  n 200  clusters 20  first-stage F   hausman p 0.8851
+
+step 1 | eu_non_eu | OLS | d_annual_ratio_non_eu
+  quarterly: coef -0.1453  se 0.1549  p 0.3601  n 840  clusters 20  first-stage F   hausman p 0.02368
+  annual:    coef -0.3115  se 0.1748  p 0.09064  n 200  clusters 20  first-stage F   hausman p 0.8851
+
+step 1 | pooled | 2SLS | d_annual_ratio_migrant
+  quarterly: coef -3.089  se 1.449  p 0.0463  n 840  clusters 20  first-stage F 3.671  hausman p 0.06965
+  annual:    coef -0.08903  se 0.2584  p 0.7342  n 200  clusters 20  first-stage F 20.82  hausman p 0.702
+
+step 1 | pooled | OLS | d_annual_ratio_migrant
+  quarterly: coef -0.04939  se 0.08596  p 0.5724  n 840  clusters 20  first-stage F   hausman p 0.06965
+  annual:    coef -0.2007  se 0.1648  p 0.2381  n 200  clusters 20  first-stage F   hausman p 0.702
+
+step 2 | eu_non_eu | 2SLS | d_annual_ratio_eu
+  quarterly: coef -3.373  se 3.776  p 0.3829  n 840  clusters 20  first-stage F 3.823  hausman p 0.03491
+  annual:    coef 1.15  se 5.294  p 0.8304  n 200  clusters 20  first-stage F 0.6834  hausman p 0.9016
+
+step 2 | eu_non_eu | 2SLS | d_annual_ratio_non_eu
+  quarterly: coef -2.879  se 1.167  p 0.02328  n 840  clusters 20  first-stage F 13.47  hausman p 0.03491
+  annual:    coef -0.3555  se 0.7378  p 0.6355  n 200  clusters 20  first-stage F 12.77  hausman p 0.9016
+
+step 2 | eu_non_eu | OLS | d_annual_ratio_eu
+  quarterly: coef 0.1274  se 0.5143  p 0.807  n 840  clusters 20  first-stage F   hausman p 0.03491
+  annual:    coef 0.1401  se 0.3358  p 0.6812  n 200  clusters 20  first-stage F   hausman p 0.9016
+
+step 2 | eu_non_eu | OLS | d_annual_ratio_non_eu
+  quarterly: coef -0.1455  se 0.1512  p 0.3479  n 840  clusters 20  first-stage F   hausman p 0.03491
+  annual:    coef -0.3658  se 0.1842  p 0.06169  n 200  clusters 20  first-stage F   hausman p 0.9016
+
+step 2 | pooled | 2SLS | d_annual_ratio_migrant
+  quarterly: coef -3.441  se 2.023  p 0.1052  n 840  clusters 20  first-stage F 2.879  hausman p 0.07887
+  annual:    coef -0.1393  se 0.1454  p 0.3502  n 200  clusters 20  first-stage F 18.37  hausman p 0.8112
+
+step 2 | pooled | OLS | d_annual_ratio_migrant
+  quarterly: coef -0.06151  se 0.08137  p 0.459  n 840  clusters 20  first-stage F   hausman p 0.07887
+  annual:    coef -0.2159  se 0.1776  p 0.239  n 200  clusters 20  first-stage F   hausman p 0.8112
+
+step 3 | eu_non_eu | 2SLS | d_annual_ratio_eu
+  quarterly: coef -3.459  se 3.736  p 0.366  n 840  clusters 20  first-stage F 3.715  hausman p 0.02083
+  annual:    coef 0.5089  se 3.811  p 0.8952  n 200  clusters 20  first-stage F 0.6378  hausman p 0.8959
+
+step 3 | eu_non_eu | 2SLS | d_annual_ratio_non_eu
+  quarterly: coef -2.959  se 1.117  p 0.01579  n 840  clusters 20  first-stage F 14.07  hausman p 0.02083
+  annual:    coef -0.246  se 0.5308  p 0.6483  n 200  clusters 20  first-stage F 12.46  hausman p 0.8959
+
+step 3 | eu_non_eu | OLS | d_annual_ratio_eu
+  quarterly: coef 0.1426  se 0.5067  p 0.7815  n 840  clusters 20  first-stage F   hausman p 0.02083
+  annual:    coef 0.1584  se 0.3319  p 0.6387  n 200  clusters 20  first-stage F   hausman p 0.8959
+
+step 3 | eu_non_eu | OLS | d_annual_ratio_non_eu
+  quarterly: coef -0.1402  se 0.144  p 0.3426  n 840  clusters 20  first-stage F   hausman p 0.02083
+  annual:    coef -0.3616  se 0.1876  p 0.069  n 200  clusters 20  first-stage F   hausman p 0.8959
+
+step 3 | pooled | 2SLS | d_annual_ratio_migrant
+  quarterly: coef -3.524  se 1.931  p 0.08373  n 840  clusters 20  first-stage F 2.995  hausman p 0.06531
+  annual:    coef -0.1226  se 0.1546  p 0.4378  n 200  clusters 20  first-stage F 17.55  hausman p 0.7948
+
+step 3 | pooled | OLS | d_annual_ratio_migrant
+  quarterly: coef -0.05298  se 0.08141  p 0.523  n 840  clusters 20  first-stage F   hausman p 0.06531
+  annual:    coef -0.2085  se 0.1776  p 0.2549  n 200  clusters 20  first-stage F   hausman p 0.7948
+
+step 4 | eu_non_eu | 2SLS | d_annual_ratio_eu
+  quarterly: coef -4.472  se 4.798  p 0.363  n 840  clusters 20  first-stage F 3.074  hausman p 0.02174
+  annual:    coef -0.4184  se 4.536  p 0.9275  n 200  clusters 20  first-stage F 0.627  hausman p 0.8395
+
+step 4 | eu_non_eu | 2SLS | d_annual_ratio_non_eu
+  quarterly: coef -2.999  se 1.064  p 0.01096  n 840  clusters 20  first-stage F 14.15  hausman p 0.02174
+  annual:    coef -0.07903  se 0.6077  p 0.8979  n 200  clusters 20  first-stage F 12.34  hausman p 0.8395
+
+step 4 | eu_non_eu | OLS | d_annual_ratio_eu
+  quarterly: coef 0.03499  se 0.5717  p 0.9518  n 840  clusters 20  first-stage F   hausman p 0.02174
+  annual:    coef 0.162  se 0.3184  p 0.6168  n 200  clusters 20  first-stage F   hausman p 0.8395
+
+step 4 | eu_non_eu | OLS | d_annual_ratio_non_eu
+  quarterly: coef -0.1335  se 0.1348  p 0.3343  n 840  clusters 20  first-stage F   hausman p 0.02174
+  annual:    coef -0.3573  se 0.1867  p 0.07087  n 200  clusters 20  first-stage F   hausman p 0.8395
+
+step 4 | pooled | 2SLS | d_annual_ratio_migrant
+  quarterly: coef -3.916  se 2.107  p 0.0787  n 840  clusters 20  first-stage F 2.718  hausman p 0.05206
+  annual:    coef -0.07015  se 0.1717  p 0.6875  n 200  clusters 20  first-stage F 17.34  hausman p 0.6838
+
+step 4 | pooled | OLS | d_annual_ratio_migrant
+  quarterly: coef -0.08228  se 0.1053  p 0.4443  n 840  clusters 20  first-stage F   hausman p 0.05206
+  annual:    coef -0.2044  se 0.1748  p 0.2569  n 200  clusters 20  first-stage F   hausman p 0.6838
+

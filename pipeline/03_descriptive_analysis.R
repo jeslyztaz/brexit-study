@@ -363,35 +363,41 @@ save_figure(
   5.1
 )
 
-ratio_changes <- list(
-  list(
-    column = "d_qoq_ratio_migrant",
-    file = "d_qoq_ratio_migrant_by_residence.png",
-    title = "Quarter-to-quarter change in the migrant ratio",
-    y = "Change in ratio"
+save_figure(
+  plot_one(
+    reg,
+    "d_qoq_ratio_migrant",
+    "Quarter-to-quarter change in the migrant ratio",
+    "Change in ratio",
+    transition_caption
   ),
-  list(
-    column = "d_qoq_ratio_eu",
-    file = "d_qoq_ratio_eu_by_residence.png",
-    title = "Quarter-to-quarter change in the EU ratio",
-    y = "Change in ratio"
-  ),
-  list(
-    column = "d_qoq_ratio_non_eu",
-    file = "d_qoq_ratio_non_eu_by_residence.png",
-    title = "Quarter-to-quarter change in the non-EU ratio",
-    y = "Change in ratio"
-  )
+  "d_qoq_ratio_migrant_by_residence.png",
+  facet_width,
+  facet_height
 )
 
-for (spec in ratio_changes) {
-  save_figure(
-    plot_one(reg, spec$column, spec$title, spec$y, transition_caption),
-    spec$file,
-    facet_width,
-    facet_height
-  )
-}
+# Within each origin. The previous row in the long data is the other
+# origin, so lag() there is not this change.
+eu_non_eu_changes <- c(
+  d_qoq_ratio_eu = "EU",
+  d_qoq_ratio_non_eu = "Non-EU"
+)
+save_figure(
+  plot_groups(
+    to_long(reg, names(eu_non_eu_changes), eu_non_eu_changes),
+    "Quarter-to-quarter change in the EU and non-EU ratios",
+    "Change in ratio",
+    paste(
+      transition_caption,
+      "Each residence has its own vertical scale."
+    ),
+    facet = TRUE,
+    scales = "free_y"
+  ),
+  "d_qoq_ratio_eu_non_eu_by_residence.png",
+  facet_width,
+  facet_height
+)
 
 save_figure(
   plot_groups(
@@ -475,4 +481,4 @@ for (spec in controls) {
   )
 }
 
-message("Wrote 14 charts to ", fig_dir, ".")
+message("Wrote 13 charts to ", fig_dir, ".")

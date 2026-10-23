@@ -25,6 +25,7 @@ data/processed/*
 !data/processed/residence_quarter_panel.csv
 !data/processed/residence_quarter_panel_v0.csv
 !data/processed/residence_quarter_regression.csv
+!data/processed/residence_annual_regression.csv
 
 
 # Keep README files inside data folders

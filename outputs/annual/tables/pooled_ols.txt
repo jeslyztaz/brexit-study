@@ -1,0 +1,23 @@
+                                                         none                                FE                       + ethnicity                       + education                             + age
+Dependent Var.:             d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born d_annual_mean_log_hourpay_uk_born
+                                                                                                                                                                                                     
+Constant                                   0.0434*** (0.0010)                                                                                                                                        
+d_annual_ratio_migrant                       -0.0125 (0.1236)                  -0.2007 (0.1648)                  -0.2159 (0.1776)                  -0.2085 (0.1776)                  -0.2044 (0.1748)
+d_annual_share_uk_asian                                                                                          -0.1033 (0.2181)                  -0.0975 (0.2138)                  -0.0295 (0.2408)
+d_annual_share_uk_black                                                                                          -0.2982 (0.5097)                  -0.3084 (0.4963)                  -0.2602 (0.5022)
+d_annual_share_uk_chinese                                                                                          -1.922 (1.602)                    -1.846 (1.673)                    -1.592 (1.680)
+d_annual_share_uk_eth_other                                                                                      0.9957. (0.5266)                   0.8563 (0.5075)                  0.8846. (0.5078)
+d_annual_share_uk_degree                                                                                                                            0.1246 (0.1583)                   0.0829 (0.1679)
+d_annual_share_uk_low_qual                                                                                                                          0.1141 (0.1109)                   0.1054 (0.1114)
+d_annual_mean_age_uk_born                                                                                                                                                             0.0142 (0.0101)
+n_obs                                                     200                               200                               200                               200                               200
+n_clusters                                                 20                                20                                20                                20                                20
+first_stage_f                                                                                                                                                                                        
+hausman_p                                             0.04696                             0.702                            0.8112                            0.7948                            0.6838
+Fixed-Effects:                 ------------------------------    ------------------------------    ------------------------------    ------------------------------    ------------------------------
+residence                                                  No                               Yes                               Yes                               Yes                               Yes
+period                                                     No                               Yes                               Yes                               Yes                               Yes
+___________________________    ______________________________    ______________________________    ______________________________    ______________________________    ______________________________
+S.E.: Clustered                                 by: residence                     by: residence                     by: residence                     by: residence                     by: residence
+---
+Signif. codes: 0 '***' 0.001 '**' 0.01 '*' 0.05 '.' 0.1 ' ' 1
