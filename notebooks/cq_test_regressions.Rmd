@@ -11,5 +11,983 @@ library(here)
 source(here("setup.R"))
 source(here("functions", "data_cleaners.R"))
 source(here("functions", "lfs_panel.R"))
+source(here("functions", "construct_variables.R"))
+```
 
+## Prep Data
+```{r}
+panel06_26 <- build_residence_quarter_panel(
+  here("data", "quarterly_lfs_raw"),
+  from_year = 2006
+)
+
+panel06_26 %>% glimpse
+
+panel06_26 <- read.csv("../data/processed/residence_quarter_panel_full.csv") %>% glimpse
+```
+
+## Construct Variables
+```{r}
+panel_file <- here("data", "processed", "residence_quarter_panel_full.csv")
+if (!file.exists(panel_file)) {
+  stop("Cannot find ", panel_file, ". Run pipeline/01_prep_data.R first.")
+}
+
+panel <- readr::read_csv(panel_file, show_col_types = FALSE)
+vars <- construct_variables(panel)
+
+vars %>% glimpse
+```
+
+## Main Regressions
+```{r}
+df <- read_csv("../data/processed/residence_quarter_regression.csv") %>% 
+  filter(year>2021) %>%
+  glimpse
+
+```
+```{r}
+model1 <- feols(d_qoq_mean_log_hourpay_uk_born ~ d_qoq_mean_age_uk_born + d_qoq_share_uk_degree + d_qoq_share_uk_black| year |
+                  d_qoq_ratio_migrant ~ d_qoq_national_ratio_migrant:baseline_ratio_migrant,
+                data = df, vcov = ~residence
+                )
+etable(model1, stage = 1:2)
+```
+
+```{r}
+model1 <- feols(d_qoq_mean_log_hourpay_uk_born ~ mean_age_uk_born + share_uk_degree + share_uk_black| year |
+                  d_qoq_ratio_migrant ~ d_qoq_national_ratio_migrant:baseline_ratio_migrant,
+                data = df, vcov = ~residence
+                )
+etable(model1, stage = 1:2)
+```
+
+## Quarterly regressions
+
+The sample is `year > 2020`. Fixed effects stay residence and quarter. COVID controls are the 2020 age-standardised mortality rate interacted with year, with 2021 omitted, added after ethnicity and before education. In the 2SLS chunks, `etable` prints both stages and the first-stage F and Wald tests (`ivf` and `ivwald`).
+
+```{r quarterly-sample}
+q_file <- here("data", "processed", "residence_quarter_regression.csv")
+if (!file.exists(q_file)) {
+  stop("Cannot find ", q_file, ". Run pipeline/02_construct_variables.R first.")
+}
+q_reg <- read_csv(q_file, show_col_types = FALSE) %>%
+  filter(year > 2020) %>%
+  filter(if_all(
+    all_of(c(
+      "d_qoq_mean_log_hourpay_uk_born", "residence", "period",
+      "d_qoq_ratio_migrant", "shift_share_qoq_migrant",
+      "d_qoq_ratio_eu", "d_qoq_ratio_non_eu",
+      "shift_share_qoq_eu", "shift_share_qoq_non_eu",
+      "d_qoq_share_uk_asian", "d_qoq_share_uk_black",
+      "d_qoq_share_uk_chinese", "d_qoq_share_uk_eth_other",
+      "d_qoq_share_uk_degree", "d_qoq_share_uk_low_qual",
+      "d_qoq_mean_age_uk_born"
+    )),
+    ~ !is.na(.)
+  )) %>%
+  mutate(residence = as.character(residence), year = as.integer(year))
+
+covid <- read_csv(here("data", "processed", "ons_covid_by_area_20.csv"), show_col_types = FALSE) %>%
+  transmute(
+    residence = as.character(residence),
+    covid_asmr_2020 = as.numeric(covid_asmr_2020)
+  )
+if (anyDuplicated(covid$residence) > 0L || any(!is.finite(covid$covid_asmr_2020))) {
+  stop("COVID file must have one finite 2020 rate per residence.")
+}
+n_before <- nrow(q_reg)
+q_reg <- left_join(q_reg, covid, by = "residence")
+if (nrow(q_reg) != n_before) {
+  stop("COVID join changed the row count.")
+}
+if (any(!is.finite(q_reg$covid_asmr_2020))) {
+  stop("A residence has no 2020 COVID rate.")
+}
+if (n_distinct(q_reg$residence) != 20L || min(q_reg$year) != 2021L) {
+  stop("Estimation sample must be all 20 residences from 2021 onward.")
+}
+if (n_distinct(q_reg$residence[q_reg$year == 2021L]) != n_distinct(q_reg$residence)) {
+  stop("2021 is missing for a residence, so it cannot be the omitted COVID year.")
+}
+q_reg <- q_reg %>%
+  mutate(
+    covid_asmr_2020_y2022 = covid_asmr_2020 * (year == 2022),
+    covid_asmr_2020_y2023 = covid_asmr_2020 * (year == 2023),
+    covid_asmr_2020_y2024 = covid_asmr_2020 * (year == 2024),
+    covid_asmr_2020_y2025 = covid_asmr_2020 * (year == 2025),
+    covid_asmr_2020_y2026 = covid_asmr_2020 * (year == 2026)
+  )
+nrow(q_reg)
+```
+
+## Quarterly pooled
+
+The endogenous variable is `d_qoq_ratio_migrant`. The instrument is `shift_share_qoq_migrant`.
+
+### Step 0 OLS, no controls
+
+```{r q-pool-ols-0}
+model_q_pool_ols_0 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ d_qoq_ratio_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_ols_0)
+```
+
+### Step 0 2SLS, no controls
+
+```{r q-pool-iv-0}
+model_q_pool_iv_0 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ 1 |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_0, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 1 OLS, residence and quarter fixed effects
+
+```{r q-pool-ols-1}
+model_q_pool_ols_1 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ d_qoq_ratio_migrant | residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_ols_1)
+```
+
+### Step 1 2SLS, residence and quarter fixed effects
+
+```{r q-pool-iv-1}
+model_q_pool_iv_1 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ 1 |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_1, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 2 OLS, fixed effects and ethnicity
+
+```{r q-pool-ols-2}
+model_q_pool_ols_2 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_migrant +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_ols_2)
+```
+
+### Step 2 2SLS, fixed effects and ethnicity
+
+```{r q-pool-iv-2}
+model_q_pool_iv_2 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_2, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 3 OLS, fixed effects, ethnicity, and COVID
+
+```{r q-pool-ols-3}
+model_q_pool_ols_3 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_migrant +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_ols_3)
+```
+
+### Step 3 2SLS, fixed effects, ethnicity, and COVID
+
+```{r q-pool-iv-3}
+model_q_pool_iv_3 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_3, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 4 OLS, fixed effects, ethnicity, COVID, and education
+
+```{r q-pool-ols-4}
+model_q_pool_ols_4 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_migrant +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_ols_4)
+```
+
+### Step 4 2SLS, fixed effects, ethnicity, COVID, and education
+
+```{r q-pool-iv-4}
+model_q_pool_iv_4 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_4, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 OLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r q-pool-ols-5}
+model_q_pool_ols_5 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_migrant +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_ols_5)
+```
+
+### Step 5 2SLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r q-pool-iv-5}
+model_q_pool_iv_5 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_5, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 2SLS, inclusive national migrant shift
+
+`shift_share_qoq_migrant` is the 2017–2019 baseline times the quarter-to-quarter change in the leave-one-out national migrant ratio. Here the shift is `d_qoq_national_ratio_migrant`, the same change in the national migrant ratio with every residence included. The outcome, controls, fixed effects, sample, and clustering match the step 5 2SLS above.
+
+```{r q-pool-iv-5-inclusive}
+if (!all(c("baseline_ratio_migrant", "d_qoq_national_ratio_migrant") %in% names(q_reg))) {
+  stop("q_reg needs baseline_ratio_migrant and d_qoq_national_ratio_migrant.")
+}
+q_inclusive <- q_reg %>%
+  mutate(
+    shift_share_qoq_migrant_inclusive =
+      baseline_ratio_migrant * d_qoq_national_ratio_migrant
+  )
+if (any(!is.finite(q_inclusive$shift_share_qoq_migrant_inclusive))) {
+  stop("Inclusive shift-share is missing on a step 5 row.")
+}
+model_q_pool_iv_5_inclusive <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant_inclusive,
+  data = q_inclusive,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_5_inclusive, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 2SLS, population-weighted leave-one-out shift
+
+`shift_share_qoq_migrant` multiplies the 2017–2019 baseline by the quarter-to-quarter change in the other residences' pooled migrant stock over their pooled native stock. This chunk builds the leave-one-out change as the average of the other residences' own quarter-to-quarter migrant-ratio changes, weighted by each residence's population in that quarter. Population is `pop` on the residence-quarter panel: the person-weighted count of residents aged 16–64, with unknown birthplace included. The instrument is the baseline times that average. The outcome, controls, fixed effects, sample, and clustering match the step 5 2SLS.
+
+```{r q-pool-iv-5-loo-pop}
+panel_pop <- read_csv(
+  here("data", "processed", "residence_quarter_panel_full.csv"),
+  show_col_types = FALSE
+) %>%
+  transmute(
+    residence = as.character(residence),
+    year = as.integer(year),
+    quarter = as.integer(quarter),
+    pop = as.numeric(pop)
+  )
+if (anyDuplicated(panel_pop[c("residence", "year", "quarter")]) > 0L) {
+  stop("Duplicate residence-quarter rows in the panel population.")
+}
+if (any(!is.finite(panel_pop$pop) | panel_pop$pop <= 0)) {
+  stop("Population must be finite and positive.")
+}
+ratio_changes <- read_csv(
+  here("data", "processed", "residence_quarter_regression.csv"),
+  show_col_types = FALSE
+) %>%
+  transmute(
+    residence = as.character(residence),
+    year = as.integer(year),
+    quarter = as.integer(quarter),
+    d_qoq_ratio_migrant = as.numeric(d_qoq_ratio_migrant)
+  ) %>%
+  left_join(panel_pop, by = c("residence", "year", "quarter"))
+if (any(!is.finite(ratio_changes$pop))) {
+  stop("A residence-quarter is missing population.")
+}
+loo_pop <- ratio_changes %>%
+  group_by(year, quarter) %>%
+  mutate(
+    n_areas = n(),
+    n_finite = sum(is.finite(d_qoq_ratio_migrant)),
+    d_loo_ratio_migrant_pop =
+      (sum(pop_uk_born * d_qoq_ratio_migrant) - pop * d_qoq_ratio_migrant) /
+      (sum(pop) - pop)
+  ) %>%
+  ungroup() %>%
+  select(residence, year, quarter, n_areas, n_finite, d_loo_ratio_migrant_pop)
+q_loo_pop <- q_reg %>%
+  mutate(quarter = as.integer(quarter)) %>%
+  left_join(loo_pop, by = c("residence", "year", "quarter")) %>%
+  mutate(
+    shift_share_qoq_migrant_loo_pop =
+      baseline_ratio_migrant * d_loo_ratio_migrant_pop
+  )
+if (nrow(q_loo_pop) != nrow(q_reg)) {
+  stop("Population-weighted leave-one-out join changed the row count.")
+}
+if (any(q_loo_pop$n_areas != 20L | q_loo_pop$n_finite != 20L)) {
+  stop("A step 5 quarter does not have a finite migrant-ratio change for all 20 residences.")
+}
+if (any(!is.finite(q_loo_pop$shift_share_qoq_migrant_loo_pop))) {
+  stop("Population-weighted leave-one-out shift-share is missing on a step 5 row.")
+}
+model_q_pool_iv_5_loo_pop <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period |
+    d_qoq_ratio_migrant ~ shift_share_qoq_migrant_loo_pop,
+  data = q_loo_pop,
+  vcov = ~residence
+)
+etable(model_q_pool_iv_5_loo_pop, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+## Quarterly EU and non-EU
+
+The endogenous variables are `d_qoq_ratio_eu` and `d_qoq_ratio_non_eu`. The instruments are `shift_share_qoq_eu` and `shift_share_qoq_non_eu`.
+
+### Step 0 OLS, no controls
+
+```{r q-eu-ols-0}
+model_q_eu_ols_0 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ d_qoq_ratio_eu + d_qoq_ratio_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_ols_0)
+```
+
+### Step 0 2SLS, no controls
+
+```{r q-eu-iv-0}
+model_q_eu_iv_0 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ 1 |
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu ~ shift_share_qoq_eu + shift_share_qoq_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_iv_0, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 1 OLS, residence and quarter fixed effects
+
+```{r q-eu-ols-1}
+model_q_eu_ols_1 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ d_qoq_ratio_eu + d_qoq_ratio_non_eu | residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_ols_1)
+```
+
+### Step 1 2SLS, residence and quarter fixed effects
+
+```{r q-eu-iv-1}
+model_q_eu_iv_1 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~ 1 |
+    residence + period |
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu ~ shift_share_qoq_eu + shift_share_qoq_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_iv_1, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 2 OLS, fixed effects and ethnicity
+
+```{r q-eu-ols-2}
+model_q_eu_ols_2 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_ols_2)
+```
+
+### Step 2 2SLS, fixed effects and ethnicity
+
+```{r q-eu-iv-2}
+model_q_eu_iv_2 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other |
+    residence + period |
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu ~ shift_share_qoq_eu + shift_share_qoq_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_iv_2, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 3 OLS, fixed effects, ethnicity, and COVID
+
+```{r q-eu-ols-3}
+model_q_eu_ols_3 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_ols_3)
+```
+
+### Step 3 2SLS, fixed effects, ethnicity, and COVID
+
+```{r q-eu-iv-3}
+model_q_eu_iv_3 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 |
+    residence + period |
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu ~ shift_share_qoq_eu + shift_share_qoq_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_iv_3, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 4 OLS, fixed effects, ethnicity, COVID, and education
+
+```{r q-eu-ols-4}
+model_q_eu_ols_4 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_ols_4)
+```
+
+### Step 4 2SLS, fixed effects, ethnicity, COVID, and education
+
+```{r q-eu-iv-4}
+model_q_eu_iv_4 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual |
+    residence + period |
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu ~ shift_share_qoq_eu + shift_share_qoq_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_iv_4, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 OLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r q-eu-ols-5}
+model_q_eu_ols_5 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu +
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_ols_5)
+```
+
+### Step 5 2SLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r q-eu-iv-5}
+model_q_eu_iv_5 <- feols(
+  d_qoq_mean_log_hourpay_uk_born ~
+    d_qoq_share_uk_asian + d_qoq_share_uk_black + d_qoq_share_uk_chinese + d_qoq_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 + covid_asmr_2020_y2026 +
+    d_qoq_share_uk_degree + d_qoq_share_uk_low_qual +
+    d_qoq_mean_age_uk_born |
+    residence + period |
+    d_qoq_ratio_eu + d_qoq_ratio_non_eu ~ shift_share_qoq_eu + shift_share_qoq_non_eu,
+  data = q_reg,
+  vcov = ~residence
+)
+etable(model_q_eu_iv_5, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+## Annual regressions
+
+The sample is `year > 2020` on complete calendar years. `period` is the calendar year. `d_annual_*_l1` is left out. COVID controls are the 2020 age-standardised mortality rate interacted with year, with 2021 omitted, added after ethnicity and before education. The interactions stop at 2025 because 2026 is not a complete year. In the 2SLS chunks, `etable` prints both stages and the first-stage F and Wald tests (`ivf` and `ivwald`).
+
+```{r annual-sample}
+a_file <- here("data", "processed", "residence_annual_regression.csv")
+if (!file.exists(a_file)) {
+  stop(
+    "Cannot find ", a_file,
+    ". Run pipeline/02_construct_annual_variables.R first."
+  )
+}
+a_reg <- read_csv(a_file, show_col_types = FALSE) %>%
+  filter(year > 2020) %>%
+  filter(if_all(
+    all_of(c(
+      "d_annual_mean_log_hourpay_uk_born", "residence", "year", "period",
+      "d_annual_ratio_migrant", "shift_share_annual_migrant",
+      "d_annual_ratio_eu", "d_annual_ratio_non_eu",
+      "shift_share_annual_eu", "shift_share_annual_non_eu",
+      "d_annual_share_uk_asian", "d_annual_share_uk_black",
+      "d_annual_share_uk_chinese", "d_annual_share_uk_eth_other",
+      "d_annual_share_uk_degree", "d_annual_share_uk_low_qual",
+      "d_annual_mean_age_uk_born"
+    )),
+    ~ !is.na(.)
+  )) %>%
+  mutate(
+    residence = as.character(residence),
+    year = as.integer(year),
+    period = as.character(year)
+  )
+
+covid <- read_csv(here("data", "processed", "ons_covid_by_area_20.csv"), show_col_types = FALSE) %>%
+  transmute(
+    residence = as.character(residence),
+    covid_asmr_2020 = as.numeric(covid_asmr_2020)
+  )
+if (anyDuplicated(covid$residence) > 0L || any(!is.finite(covid$covid_asmr_2020))) {
+  stop("COVID file must have one finite 2020 rate per residence.")
+}
+n_before <- nrow(a_reg)
+a_reg <- left_join(a_reg, covid, by = "residence")
+if (nrow(a_reg) != n_before) {
+  stop("COVID join changed the row count.")
+}
+if (any(!is.finite(a_reg$covid_asmr_2020))) {
+  stop("A residence has no 2020 COVID rate.")
+}
+if (n_distinct(a_reg$residence) != 20L || min(a_reg$year) != 2021L) {
+  stop("Estimation sample must be all 20 residences from 2021 onward.")
+}
+if (n_distinct(a_reg$residence[a_reg$year == 2021L]) != n_distinct(a_reg$residence)) {
+  stop("2021 is missing for a residence, so it cannot be the omitted COVID year.")
+}
+a_reg <- a_reg %>%
+  mutate(
+    covid_asmr_2020_y2022 = covid_asmr_2020 * (year == 2022),
+    covid_asmr_2020_y2023 = covid_asmr_2020 * (year == 2023),
+    covid_asmr_2020_y2024 = covid_asmr_2020 * (year == 2024),
+    covid_asmr_2020_y2025 = covid_asmr_2020 * (year == 2025)
+  )
+nrow(a_reg)
+```
+
+## Annual pooled
+
+The endogenous variable is `d_annual_ratio_migrant`. The instrument is `shift_share_annual_migrant`.
+
+### Step 0 OLS, no controls
+
+```{r a-pool-ols-0}
+model_a_pool_ols_0 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ d_annual_ratio_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_ols_0)
+```
+
+### Step 0 2SLS, no controls
+
+```{r a-pool-iv-0}
+model_a_pool_iv_0 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ 1 |
+    d_annual_ratio_migrant ~ shift_share_annual_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_iv_0, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 1 OLS, residence and year fixed effects
+
+```{r a-pool-ols-1}
+model_a_pool_ols_1 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ d_annual_ratio_migrant | residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_ols_1)
+```
+
+### Step 1 2SLS, residence and year fixed effects
+
+```{r a-pool-iv-1}
+model_a_pool_iv_1 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ 1 |
+    residence + period |
+    d_annual_ratio_migrant ~ shift_share_annual_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_iv_1, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 2 OLS, fixed effects and ethnicity
+
+```{r a-pool-ols-2}
+model_a_pool_ols_2 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_migrant +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_ols_2)
+```
+
+### Step 2 2SLS, fixed effects and ethnicity
+
+```{r a-pool-iv-2}
+model_a_pool_iv_2 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other |
+    residence + period |
+    d_annual_ratio_migrant ~ shift_share_annual_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_iv_2, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 3 OLS, fixed effects, ethnicity, and COVID
+
+```{r a-pool-ols-3}
+model_a_pool_ols_3 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_migrant +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_ols_3)
+```
+
+### Step 3 2SLS, fixed effects, ethnicity, and COVID
+
+```{r a-pool-iv-3}
+model_a_pool_iv_3 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 |
+    residence + period |
+    d_annual_ratio_migrant ~ shift_share_annual_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_iv_3, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 4 OLS, fixed effects, ethnicity, COVID, and education
+
+```{r a-pool-ols-4}
+model_a_pool_ols_4 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_migrant +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_ols_4)
+```
+
+### Step 4 2SLS, fixed effects, ethnicity, COVID, and education
+
+```{r a-pool-iv-4}
+model_a_pool_iv_4 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual |
+    residence + period |
+    d_annual_ratio_migrant ~ shift_share_annual_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_iv_4, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 OLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r a-pool-ols-5}
+model_a_pool_ols_5 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_migrant +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual +
+    d_annual_mean_age_uk_born |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_ols_5)
+```
+
+### Step 5 2SLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r a-pool-iv-5}
+model_a_pool_iv_5 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual +
+    d_annual_mean_age_uk_born |
+    residence + period |
+    d_annual_ratio_migrant ~ shift_share_annual_migrant,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_pool_iv_5, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+## Annual EU and non-EU
+
+The endogenous variables are `d_annual_ratio_eu` and `d_annual_ratio_non_eu`. The instruments are `shift_share_annual_eu` and `shift_share_annual_non_eu`.
+
+### Step 0 OLS, no controls
+
+```{r a-eu-ols-0}
+model_a_eu_ols_0 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ d_annual_ratio_eu + d_annual_ratio_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_ols_0)
+```
+
+### Step 0 2SLS, no controls
+
+```{r a-eu-iv-0}
+model_a_eu_iv_0 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ 1 |
+    d_annual_ratio_eu + d_annual_ratio_non_eu ~ shift_share_annual_eu + shift_share_annual_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_iv_0, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 1 OLS, residence and year fixed effects
+
+```{r a-eu-ols-1}
+model_a_eu_ols_1 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ d_annual_ratio_eu + d_annual_ratio_non_eu | residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_ols_1)
+```
+
+### Step 1 2SLS, residence and year fixed effects
+
+```{r a-eu-iv-1}
+model_a_eu_iv_1 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~ 1 |
+    residence + period |
+    d_annual_ratio_eu + d_annual_ratio_non_eu ~ shift_share_annual_eu + shift_share_annual_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_iv_1, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 2 OLS, fixed effects and ethnicity
+
+```{r a-eu-ols-2}
+model_a_eu_ols_2 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_eu + d_annual_ratio_non_eu +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_ols_2)
+```
+
+### Step 2 2SLS, fixed effects and ethnicity
+
+```{r a-eu-iv-2}
+model_a_eu_iv_2 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other |
+    residence + period |
+    d_annual_ratio_eu + d_annual_ratio_non_eu ~ shift_share_annual_eu + shift_share_annual_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_iv_2, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 3 OLS, fixed effects, ethnicity, and COVID
+
+```{r a-eu-ols-3}
+model_a_eu_ols_3 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_eu + d_annual_ratio_non_eu +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_ols_3)
+```
+
+### Step 3 2SLS, fixed effects, ethnicity, and COVID
+
+```{r a-eu-iv-3}
+model_a_eu_iv_3 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 |
+    residence + period |
+    d_annual_ratio_eu + d_annual_ratio_non_eu ~ shift_share_annual_eu + shift_share_annual_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_iv_3, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 4 OLS, fixed effects, ethnicity, COVID, and education
+
+```{r a-eu-ols-4}
+model_a_eu_ols_4 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_eu + d_annual_ratio_non_eu +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_ols_4)
+```
+
+### Step 4 2SLS, fixed effects, ethnicity, COVID, and education
+
+```{r a-eu-iv-4}
+model_a_eu_iv_4 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual |
+    residence + period |
+    d_annual_ratio_eu + d_annual_ratio_non_eu ~ shift_share_annual_eu + shift_share_annual_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_iv_4, fitstat = ~ . + ivf + ivwald, stage = 1:2)
+```
+
+### Step 5 OLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r a-eu-ols-5}
+model_a_eu_ols_5 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_ratio_eu + d_annual_ratio_non_eu +
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual +
+    d_annual_mean_age_uk_born |
+    residence + period,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_ols_5)
+```
+
+### Step 5 2SLS, fixed effects, ethnicity, COVID, education, and age
+
+```{r a-eu-iv-5}
+model_a_eu_iv_5 <- feols(
+  d_annual_mean_log_hourpay_uk_born ~
+    d_annual_share_uk_asian + d_annual_share_uk_black + d_annual_share_uk_chinese + d_annual_share_uk_eth_other +
+    covid_asmr_2020_y2022 + covid_asmr_2020_y2023 + covid_asmr_2020_y2024 + covid_asmr_2020_y2025 +
+    d_annual_share_uk_degree + d_annual_share_uk_low_qual +
+    d_annual_mean_age_uk_born |
+    residence + period |
+    d_annual_ratio_eu + d_annual_ratio_non_eu ~ shift_share_annual_eu + shift_share_annual_non_eu,
+  data = a_reg,
+  vcov = ~residence
+)
+etable(model_a_eu_iv_5, fitstat = ~ . + ivf + ivwald, stage = 1:2)
 ```

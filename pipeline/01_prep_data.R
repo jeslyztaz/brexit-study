@@ -1,6 +1,6 @@
-# Residence-quarter panel from data/quarterly_lfs_raw, 2014 onward.
+# Residence-quarter panel from data/quarterly_lfs_raw, 2006 onward.
 # Source this from the project root. It stops if a file in that window is
-# not a calendar quarter (jm, aj, js, od). Earlier files are left unread.
+# not a calendar quarter (jm, aj, js, od). Files before 2006 are left unread.
 
 source("setup.R")
 source(here("functions", "data_cleaners.R"))

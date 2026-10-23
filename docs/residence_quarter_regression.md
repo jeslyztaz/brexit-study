@@ -150,3 +150,23 @@ The ethnicity controls start from the panel's six UK-born ethnicity shares. The 
 `share_uk_asian`, `share_uk_black`, and `share_uk_chinese` divide the matching panel share by the sum of the six ethnicity shares. When that sum is 1, each equals the panel share. `share_uk_eth_other` divides the sum of the mixed share and the residual other share by the same total. White is not a column.
 
 `d_qoq_share_uk_asian`, `d_qoq_share_uk_black`, `d_qoq_share_uk_chinese`, and `d_qoq_share_uk_eth_other` are those four shares minus their values one calendar quarter earlier in the same residence. The level of each share remains in the file.
+
+## Regression
+
+The estimated equations are in `outputs/regressions/quarterly/tables/`. The outcome is `d_qoq_mean_log_hourpay_uk_born`. One design uses `d_qoq_ratio_migrant`, and the 2SLS table instruments it with `shift_share_qoq_migrant`. The other puts `d_qoq_ratio_eu` and `d_qoq_ratio_non_eu` in one equation, instrumented by `shift_share_qoq_eu` and `shift_share_qoq_non_eu`. Each design is estimated by OLS and 2SLS. Standard errors are clustered by residence.
+
+The sample printed in these tables is 2021 Q1 through 2026 Q2. Every column has 440 observations and 20 residence clusters. Rows from 2006 Q1 through 2020 Q4 stay on this file. The 2017–2019 baseline is outside the estimation sample and enters the 2SLS tables through `shift_share_qoq_*`. `d_yoy_*_l4` and `shift_share_yoy_*_l4` stay on this file and do not appear in the tables.
+
+The text tables add controls in this order. The fixed-effect block shows which fixed effects are on. The header `year FE` is the column label in the text table; that column has both residence and year fixed effects.
+
+0. `none`. Residence, year, and period fixed effects are off.
+1. `year FE`. Residence and year fixed effects are on. Period fixed effects are off.
+2. `+ ethnicity`. Adds `d_qoq_share_uk_asian`, `d_qoq_share_uk_black`, `d_qoq_share_uk_chinese`, and `d_qoq_share_uk_eth_other`.
+3. `+ covid`. Adds `covid_asmr_2020_y2022` through `covid_asmr_2020_y2026`. Each is the 2020 age-standardised mortality rate from `data/processed/ons_covid_by_area_20.csv`, interacted with that year. 2021 is the omitted year. These interactions are built for the regression and are not columns of this file.
+4. `+ education`. Adds `d_qoq_share_uk_degree` and `d_qoq_share_uk_low_qual`.
+5. `+ age`. Adds `d_qoq_mean_age_uk_born`. Residence and year fixed effects stay on. This is the reference column for the step-5 figures under `outputs/results/`.
+6. `period FE`. The same regressors as `+ age`. Residence fixed effects stay on, year fixed effects go off, and period fixed effects go on. `period` is the calendar quarter, such as `2021Q1`.
+
+The ethnicity, education, and age rows are the quarter-to-quarter changes. Their levels remain on this file. `hausman_p` is the Wu–Hausman test, joint in the EU and non-EU equation. The EU and non-EU 2SLS table prints the first-stage F as `first_stage_f_eu` and `first_stage_f_non_eu`.
+
+The quarterly panel has a separate `covid_asmr` column: the 2020 rate in 2020, the 2021 rate in 2021, and 0 in every other year. That column is not on this regression file. The COVID rows in the tables are the 2020 rate interacted with year.

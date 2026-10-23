@@ -1,0 +1,4 @@
+design,endogenous,instrument,other_instrument,first_stage_slope,first_stage_f,n_obs,n_clusters
+pooled,d_qoq_ratio_migrant,shift_share_qoq_migrant,NA,-5.420208371161623,30.554632187201367,440,20
+eu_non_eu,d_qoq_ratio_eu,shift_share_qoq_eu,shift_share_qoq_non_eu,-1.4930464663833327,0.9357934918673074,440,20
+eu_non_eu,d_qoq_ratio_non_eu,shift_share_qoq_non_eu,shift_share_qoq_eu,-7.922022435157812,17.288270551548685,440,20

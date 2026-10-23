@@ -1,0 +1,22 @@
+year,n_quarters,quarters,included,reason
+2006,4,"1,2,3,4",TRUE,complete calendar year
+2007,4,"1,2,3,4",TRUE,complete calendar year
+2008,4,"1,2,3,4",TRUE,complete calendar year
+2009,4,"1,2,3,4",TRUE,complete calendar year
+2010,4,"1,2,3,4",TRUE,complete calendar year
+2011,4,"1,2,3,4",TRUE,complete calendar year
+2012,4,"1,2,3,4",TRUE,complete calendar year
+2013,4,"1,2,3,4",TRUE,complete calendar year
+2014,4,"1,2,3,4",TRUE,complete calendar year
+2015,4,"1,2,3,4",TRUE,complete calendar year
+2016,4,"1,2,3,4",TRUE,complete calendar year
+2017,4,"1,2,3,4",TRUE,complete calendar year
+2018,4,"1,2,3,4",TRUE,complete calendar year
+2019,4,"1,2,3,4",TRUE,complete calendar year
+2020,4,"1,2,3,4",TRUE,complete calendar year
+2021,4,"1,2,3,4",TRUE,complete calendar year
+2022,4,"1,2,3,4",TRUE,complete calendar year
+2023,4,"1,2,3,4",TRUE,complete calendar year
+2024,4,"1,2,3,4",TRUE,complete calendar year
+2025,4,"1,2,3,4",TRUE,complete calendar year
+2026,2,"1,2",FALSE,"incomplete calendar year; present quarters: 1, 2"

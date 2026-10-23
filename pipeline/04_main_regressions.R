@@ -1,14 +1,23 @@
 # UK-born quarter-to-quarter log wages on quarter-to-quarter migrant ratios.
 #
-# Sample is 2016 Q1 onward. The instrument, shift_share_qoq_*, is the
-# 2017-2019 baseline ratio times the leave-one-out national
+# Sample is 2021 Q1 onward (year > 2020). Earlier rows stay in the
+# regression file and are removed here. The instrument, shift_share_qoq_*,
+# is the 2017-2019 baseline ratio times the leave-one-out national
 # quarter-to-quarter change.
 #
 # Two designs, each estimated by OLS and 2SLS:
 #   pooled: one endogenous variable, d_qoq_ratio_migrant
 #   eu_non_eu: d_qoq_ratio_eu and d_qoq_ratio_non_eu in one equation
-# Controls are added in order: residence and quarter fixed effects,
-# ethnicity, education, then age.
+# Controls are added in order: residence and year fixed effects, the
+# quarter-to-quarter ethnicity changes, the 2020 COVID mortality rate
+# interacted with year, the quarter-to-quarter education changes, then
+# d_qoq_mean_age_uk_born.
+# The last specification keeps those controls and uses period fixed effects
+# in place of year fixed effects. Period is the calendar quarter.
+#
+# The COVID control is one 2020 age-standardised mortality rate per
+# residence, joined from ons_covid_by_area_20.csv. It is not written back
+# to the regression file. 2021 is the omitted year.
 #
 # Standard errors are clustered by residence. That allows any within-area
 # serial correlation, so a Newey-West term is not added.
@@ -31,7 +40,7 @@ if (!file.exists(data_file)) {
 }
 
 reg <- read_csv(data_file, show_col_types = FALSE) %>%
-  filter(year > 2015) %>%
+  filter(year > 2020) %>%
   filter(if_all(
     all_of(c(
       outcome, "residence", "period",
@@ -43,13 +52,60 @@ reg <- read_csv(data_file, show_col_types = FALSE) %>%
     ~ !is.na(.)
   ))
 
+covid_file <- here("data", "processed", "ons_covid_by_area_20.csv")
+if (!file.exists(covid_file)) {
+  stop("Cannot find ", covid_file, ".", call. = FALSE)
+}
+covid <- read_csv(covid_file, show_col_types = FALSE) %>%
+  transmute(
+    residence = as.character(residence),
+    covid_asmr_2020 = as.numeric(covid_asmr_2020)
+  )
+if (anyDuplicated(covid$residence) > 0L || any(!is.finite(covid$covid_asmr_2020))) {
+  stop("COVID file must have one finite 2020 rate per residence.", call. = FALSE)
+}
+n_before <- nrow(reg)
+reg <- reg %>%
+  mutate(residence = as.character(residence), year = as.integer(year)) %>%
+  left_join(covid, by = "residence")
+if (nrow(reg) != n_before) {
+  stop("COVID join changed the row count.", call. = FALSE)
+}
+missing_covid <- sort(unique(reg$residence[!is.finite(reg$covid_asmr_2020)]))
+if (length(missing_covid) > 0L) {
+  stop(
+    "No 2020 COVID rate for: ",
+    paste(missing_covid, collapse = ", "),
+    ".",
+    call. = FALSE
+  )
+}
+if (n_distinct(reg$residence) != 20L || min(reg$year) != 2021L) {
+  stop("Estimation sample must be all 20 residences from 2021 onward.", call. = FALSE)
+}
+if (n_distinct(reg$residence[reg$year == 2021L]) != n_distinct(reg$residence)) {
+  stop("2021 is missing for a residence, so it cannot be the omitted COVID year.", call. = FALSE)
+}
+# 2021 is the omitted year. Residence fixed effects absorb the level of the
+# 2020 rate, and the estimation sample starts in 2021.
+covid_years <- sort(setdiff(unique(reg$year), 2021L))
+covid_terms <- paste0("covid_asmr_2020_y", covid_years)
+for (yr in covid_years) {
+  reg[[paste0("covid_asmr_2020_y", yr)]] <- reg$covid_asmr_2020 * (reg$year == yr)
+}
+
 steps <- data.frame(
-  step = 0:4,
-  residence_fe = c(FALSE, TRUE, TRUE, TRUE, TRUE),
-  quarter_fe = c(FALSE, TRUE, TRUE, TRUE, TRUE),
-  ethnicity = c(FALSE, FALSE, TRUE, TRUE, TRUE),
-  education = c(FALSE, FALSE, FALSE, TRUE, TRUE),
-  age = c(FALSE, FALSE, FALSE, FALSE, TRUE)
+  step = 0:6,
+  residence_fe = c(FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, TRUE),
+  year_fe = c(FALSE, TRUE, TRUE, TRUE, TRUE, TRUE, FALSE),
+  period_fe = c(FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE),
+  ethnicity = c(FALSE, FALSE, TRUE, TRUE, TRUE, TRUE, TRUE),
+  covid = c(FALSE, FALSE, FALSE, TRUE, TRUE, TRUE, TRUE),
+  education = c(FALSE, FALSE, FALSE, FALSE, TRUE, TRUE, TRUE),
+  age = c(FALSE, FALSE, FALSE, FALSE, FALSE, TRUE, TRUE)
+)
+step_labels <- c(
+  "none", "year FE", "+ ethnicity", "+ covid", "+ education", "+ age", "period FE"
 )
 
 designs <- list(
@@ -83,6 +139,7 @@ coef_rows <- function(model, endogenous, estimator) {
       coefficient = unname(tab[name, "Estimate"]),
       std_error = unname(tab[name, "Std. Error"]),
       p_value = unname(tab[name, "Pr(>|t|)"]),
+      t_df = as.numeric(degrees_freedom(model, type = "t"))[1],
       stringsAsFactors = FALSE
     )
   }))
@@ -112,16 +169,35 @@ for (design_name in names(designs)) {
 
   for (i in seq_len(nrow(steps))) {
     step <- steps[i, ]
-    if (step$residence_fe != step$quarter_fe) {
-      stop("Residence and quarter fixed effects are added together.", call. = FALSE)
+    if (isTRUE(step$year_fe) && isTRUE(step$period_fe)) {
+      stop("Year and period fixed effects are not used together.", call. = FALSE)
+    }
+    if (isTRUE(step$residence_fe) != (isTRUE(step$year_fe) || isTRUE(step$period_fe))) {
+      stop("Residence fixed effects enter with the time fixed effects.", call. = FALSE)
+    }
+    if (isTRUE(step$period_fe) && !isTRUE(step$age)) {
+      stop(
+        "Period fixed effects replace year fixed effects only after every control is included.",
+        call. = FALSE
+      )
+    }
+    if (isTRUE(step$education) && !isTRUE(step$covid)) {
+      stop("COVID controls enter before education.", call. = FALSE)
     }
     controls <- c(
       if (isTRUE(step$ethnicity)) ethnicity,
+      if (isTRUE(step$covid)) covid_terms,
       if (isTRUE(step$education)) education,
       if (isTRUE(step$age)) age
     )
     if (is.null(controls)) controls <- character()
-    fe <- if (isTRUE(step$residence_fe)) "residence + period" else ""
+    fe <- if (isTRUE(step$period_fe)) {
+      "residence + period"
+    } else if (isTRUE(step$year_fe)) {
+      "residence + year"
+    } else {
+      ""
+    }
     ols_rhs <- paste(c(endogenous, controls), collapse = " + ")
     iv_rhs <- if (length(controls) == 0L) "1" else paste(controls, collapse = " + ")
 
@@ -130,6 +206,18 @@ for (design_name in names(designs)) {
     if (nobs(ols) != nobs(iv) || nobs(ols) != nrow(reg)) {
       stop("A regression dropped rows.", call. = FALSE)
     }
+    if (isTRUE(step$covid)) {
+      dropped <- unique(c(ols$collin.var, iv$collin.var))
+      dropped <- dropped[dropped %in% covid_terms]
+      if (length(dropped) > 0L) {
+        stop(
+          "COVID controls were dropped as collinear: ",
+          paste(dropped, collapse = ", "),
+          ".",
+          call. = FALSE
+        )
+      }
+    }
 
     sample_stats <- fitstat(iv, ~ n + g + wh.p, simplify = FALSE)
     fs <- first_stage_f(iv, endogenous)
@@ -137,8 +225,10 @@ for (design_name in names(designs)) {
       step = step$step,
       design = design_name,
       residence_fe = step$residence_fe,
-      quarter_fe = step$quarter_fe,
+      year_fe = step$year_fe,
+      period_fe = step$period_fe,
       ethnicity = step$ethnicity,
+      covid = step$covid,
       education = step$education,
       age = step$age,
       n_obs = unname(sample_stats$n),
@@ -164,13 +254,15 @@ for (design_name in names(designs)) {
 
 coefs <- bind_rows(rows) %>%
   select(
-    step, design, estimator, residence_fe, quarter_fe, ethnicity, education, age,
-    endogenous, coefficient, std_error, p_value, n_obs, n_clusters,
+    step, design, estimator, residence_fe, year_fe, period_fe, ethnicity, covid,
+    education, age,
+    endogenous, coefficient, std_error, p_value, t_df, n_obs, n_clusters,
     first_stage_f, hausman_p
   )
 
-if (nrow(coefs) != 30L) {
-  stop("Expected 30 coefficient rows, got ", nrow(coefs), ".", call. = FALSE)
+# 7 steps, 2 estimators, pooled (1 coefficient) and EU/non-EU (2 coefficients).
+if (nrow(coefs) != 42L) {
+  stop("Expected 42 coefficient rows, got ", nrow(coefs), ".", call. = FALSE)
 }
 hausman_check <- coefs %>%
   group_by(design, step) %>%
@@ -179,10 +271,11 @@ if (any(hausman_check$n_p != 1L)) {
   stop("Hausman p-value differs within a design and step.", call. = FALSE)
 }
 
-out_dir <- here("outputs")
-table_dir <- here("outputs", "tables")
+table_dir <- here("outputs", "regressions", "quarterly", "tables")
 dir.create(table_dir, recursive = TRUE, showWarnings = FALSE)
-coef_path <- file.path(out_dir, "main_qoq_coefficients.csv")
+coef_path <- output_file(
+  "regressions", "quarterly", "coefficients", "main_qoq_coefficients.csv"
+)
 write_csv(coefs, coef_path, na = "")
 
 show_num <- function(x) ifelse(is.na(x), "", sprintf("%.4g", x))
@@ -213,7 +306,10 @@ write_one_table <- function(design_name, estimator_name) {
     c("first_stage_f_eu", "first_stage_f_non_eu")
   }
   mods <- lapply(kept, `[[`, "model")
-  names(mods) <- c("none", "FE", "+ ethnicity", "+ education", "+ age")
+  if (length(mods) != length(step_labels)) {
+    stop("Table columns do not match the control ladder.", call. = FALSE)
+  }
+  names(mods) <- step_labels
   # 2SLS prints the first stage and the second stage. One endogenous
   # variable adds one first-stage column; two endogenous variables add two.
   n_per <- if (estimator_name == "2SLS") length(endos) + 1L else 1L

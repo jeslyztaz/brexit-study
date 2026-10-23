@@ -1,0 +1,7 @@
+design,estimator,endogenous,coefficient,refit_gap,n_obs,n_clusters
+pooled,OLS,d_qoq_ratio_migrant,-0.3399807600933088,0,440,20
+pooled,2SLS,d_qoq_ratio_migrant,-1.0407376905660597,0,440,20
+eu_non_eu,OLS,d_qoq_ratio_eu,-0.36027472423398865,0,440,20
+eu_non_eu,OLS,d_qoq_ratio_non_eu,-0.33344264828250103,0,440,20
+eu_non_eu,2SLS,d_qoq_ratio_eu,171.29838816726243,0,440,20
+eu_non_eu,2SLS,d_qoq_ratio_non_eu,-23.33320058595378,0,440,20
