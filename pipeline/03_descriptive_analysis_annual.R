@@ -1,10 +1,17 @@
 # Descriptive charts for the annual robustness check.
 #
-# Same series as pipeline/03_descriptive_analysis.R, on the residence-year
-# file, including the one-year percent change in the UK-born stock.
-# Years are dated at 1 July. A one-year change is missing in the
-# first calendar year because there is no previous year. The quarterly
-# charts and their directory are not written by this script.
+# Residence charts for ratio levels, one-year changes (including the
+# percent change in the UK-born stock), UK-born wages, and the seven
+# UK-born controls. Ratio levels and the EU and non-EU changes give each
+# residence its own vertical scale. The other one-year residence charts
+# share one vertical scale. Years are dated at 1 July. A one-year change
+# is missing in the first calendar year because there is no previous year.
+#
+# The quarterly baseline-exposure charts, the high-versus-low chart, and
+# the quarter-to-quarter versus year-on-year comparison are not drawn
+# here. The EU heatmap stays with the quarterly script when these annual
+# EU ratios match the quarterly pooled ratios. The quarterly chart
+# directory is not written by this script.
 #
 # The ratios and means are already weighted. These charts do not weight
 # residences again. The national ratio sums area counts.
@@ -938,6 +945,8 @@ run_guarded({
     }))
   }
 
+  # Descriptive window only. The annual regression sample is year > 2020
+  # in pipeline/04_main_regressions_annual.R.
   stats <- bind_rows(
     summarise_sample(reg, "all_complete_years"),
     summarise_sample(reg %>% filter(year > 2015), "year_gt_2015")

@@ -13,7 +13,7 @@ Figures and tables are grouped by purpose. Quarterly and annual descriptive char
 
 Step 03 reads the constructed regression file. It does not read coefficients, fitted models, or files written by step 04. Step 06 reads the coefficient files and refits the reference specification, step 5, for the partial-regression and leave-one-region-out figures. That refit is checked against the coefficient file before those figures are drawn.
 
-The reference specification is residence and year fixed effects, UK-born ethnicity, the 2020 COVID mortality rate interacted with year, UK-born education, and UK-born age. The sample is 2021 Q1 onward. The instrument uses the pooled 2017–2019 baseline. Quarterly step 6, which replaces year fixed effects with quarter fixed effects, is shown in the main coefficient plot and has no annual counterpart.
+The reference specification is the `+ age` column in `outputs/regressions/quarterly/tables/`. That column has residence and year fixed effects, the quarter-to-quarter UK-born ethnicity changes, `covid_asmr_2020_y2022` through `covid_asmr_2020_y2026`, the quarter-to-quarter UK-born education changes, and `d_qoq_mean_age_uk_born`. 2021 is the omitted COVID year. The table has 440 residence-quarters, 2021 Q1 through 2026 Q2, and 20 residence clusters. The 2SLS instrument is `shift_share_qoq_*`, built from the pooled 2017–2019 baseline. The last quarterly column, `period FE`, keeps those regressors and replaces year fixed effects with quarter fixed effects. The annual `+ age` column is the same ladder on one-year changes for 2021–2025, 100 residence-years, with COVID interactions through `covid_asmr_2020_y2025`. It has no quarter-fixed-effect column. The quarterly step-6 column is in the main coefficient plot.
 
 The annual pipeline reads the raw Labour Force Survey files again. It does not rewrite quarterly outputs.
 
@@ -39,7 +39,7 @@ The earlier copies under `outputs/figures/`, `outputs/tables/`, `outputs/annual/
 `metadata/figure_omissions.csv` records three figures that are not estimated:
 
 - Sample-window re-estimates. A window that drops 2021 cannot keep 2021 as the omitted COVID year.
-- A four-quarter step-5 model. The composition controls exist only as quarter-to-quarter changes.
+- A four-quarter step-5 model. The regression file stores the levels and the quarter-to-quarter changes of ethnicity, education, and age. It does not store their four-quarter changes, and that model was not estimated.
 - A second specification-stability plot. The main coefficient plot already shows steps 0–6.
 
 The 2017–2019 baseline bar chart and the annual EU heatmap are written once, from the quarterly descriptive script, when the annual stocks match those quarterly pooled ratios.

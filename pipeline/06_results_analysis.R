@@ -1,9 +1,11 @@
 # Figures that need the fitted post-2021 models.
 #
 # Step 5 is the reference specification: residence and year fixed effects,
-# UK-born ethnicity, the 2020 COVID mortality rate interacted with year,
-# UK-born education, and UK-born age. The instrument is the 2017-2019
-# baseline times the leave-one-out national quarter-to-quarter change.
+# the quarter-to-quarter UK-born ethnicity changes, the 2020 COVID
+# mortality rate interacted with year, the quarter-to-quarter UK-born
+# education changes, and d_qoq_mean_age_uk_born. The instrument is the
+# 2017-2019 baseline times the leave-one-out national quarter-to-quarter
+# change.
 # The coefficient file from pipeline/04_main_regressions.R is the source
 # for the main ladder. Step 5 is refitted here for the partial-regression
 # figures and checked against that file. Leave-one-region-out drops rows
@@ -55,7 +57,7 @@ write_csv(
     status = "not produced",
     reason = c(
       "Post-2021 sample-window re-estimates were not run. A window that drops 2021 cannot keep 2021 as the omitted COVID year.",
-      "The four-quarter step-5 model was not estimated. Ethnicity, education, and age are stored as quarter-to-quarter changes only.",
+      "The four-quarter step-5 model was not estimated. The regression file stores the levels and the quarter-to-quarter changes of ethnicity, education, and age. It does not store their four-quarter changes.",
       "No separate specification-stability figure. The main coefficient plot shows steps 0-6, and step 5 is the reference."
     )
   ),

@@ -58,15 +58,28 @@ At an annual frequency, a one-quarter change and a four-quarter change are not t
 
 ## Regression
 
-`pipeline/04_main_regressions_annual.R` repeats the quarterly specification. The outcome is `d_annual_mean_log_hourpay_uk_born`. One design uses `d_annual_ratio_migrant` and `shift_share_annual_migrant`. The other puts `d_annual_ratio_eu` and `d_annual_ratio_non_eu` in one equation, with `shift_share_annual_eu` and `shift_share_annual_non_eu`. Each is estimated by OLS and 2SLS.
+`pipeline/04_main_regressions_annual.R` repeats the quarterly specification in `docs/residence_quarter_regression.md` on complete calendar years. The saved tables are under `outputs/regressions/annual/tables/`. The outcome is `d_annual_mean_log_hourpay_uk_born`. One design uses `d_annual_ratio_migrant`, and the 2SLS table instruments it with `shift_share_annual_migrant`. The other puts `d_annual_ratio_eu` and `d_annual_ratio_non_eu` in one equation, instrumented by `shift_share_annual_eu` and `shift_share_annual_non_eu`. Each design is estimated by OLS and 2SLS. Standard errors are clustered by residence.
 
-Controls enter in the same order: none, residence and time fixed effects, UK-born ethnicity, UK-born education, then UK-born mean age. The time fixed effect is the calendar year, in `period`. It replaces the quarterly `period` such as `2016Q1`. It is a year fixed effect, not a linear trend. Standard errors are clustered by residence. The sample is `year > 2015` on the complete-year file, with the same complete-case columns as the quarterly regression. The 2017–2019 baseline overlaps that sample, as it does in the quarterly specification.
+The sample printed in these tables is 2021–2025. Every column has 100 observations and 20 residence clusters, which is `year > 2020` on the complete-year file. The 2017–2019 baseline is outside that sample. It enters the 2SLS tables through `shift_share_annual_*`.
 
-`d_annual_ratio_*_l1` is not added. No new control, instrument, or estimator is introduced. If a model is collinear or the first stage is weak, the output says so and the specification is left as it is. `hausman_p` is the Wu–Hausman test, joint in the EU and non-EU equation. The first-stage F is the same fixest statistic as in the quarterly table.
+The columns follow the quarterly ladder through age. The fixed-effect block is what shows which fixed effects are on:
 
-The quarterly sample includes 2026 Q1–Q2 because those quarters exist. The annual sample stops at the last complete year, so it does not include an incomplete 2026. That is the coverage rule, not a different `year > 2015` rule.
+0. `none`. Residence and year fixed effects are off.
+1. `year FE`. Residence and year fixed effects are both on.
+2. `+ ethnicity`. Adds `d_annual_share_uk_asian`, `d_annual_share_uk_black`, `d_annual_share_uk_chinese`, and `d_annual_share_uk_eth_other`.
+3. `+ covid`. Adds `covid_asmr_2020_y2022`, `covid_asmr_2020_y2023`, `covid_asmr_2020_y2024`, and `covid_asmr_2020_y2025`. Each is the 2020 age-standardised mortality rate interacted with that year. 2021 is the omitted year.
+4. `+ education`. Adds `d_annual_share_uk_degree` and `d_annual_share_uk_low_qual`.
+5. `+ age`. Adds `d_annual_mean_age_uk_born`. Year fixed effects stay on. This is the annual reference column. The annual tables have no later column that replaces year fixed effects with quarter fixed effects.
 
-`covid_asmr` is joined from the same ONS file as the quarterly panel. Years other than 2020 and 2021 are filled with 0. It is not a regressor.
+The ethnicity, education, and age rows are the one-year changes. The levels remain on the regression file. `period` on that file stores the calendar year. The tables report the time fixed effect as `year`.
+
+`d_annual_ratio_*_l1` and `shift_share_annual_*_l1` do not appear in the tables. `hausman_p` is the Wu–Hausman test, joint in the EU and non-EU equation. The first-stage F is the same fixest statistic as in the quarterly table. The EU and non-EU 2SLS table prints it as `first_stage_f_eu` and `first_stage_f_non_eu`.
+
+The quarterly tables include 2026 Q1–Q2, so their COVID interactions run through `covid_asmr_2020_y2026` and they have 440 observations. The annual tables stop at 2025 because 2026 is an incomplete year. Both estimation samples are `year > 2020`.
+
+`outputs/descriptive/annual/tables/descriptive_stats.csv` also contains a `year_gt_2015` block, 200 residence-years from 2016 through 2025. That block is a descriptive summary. It is a different window from the 100 observations in the regression tables.
+
+`covid_asmr` on the annual panel is a separate series: the 2020 rate in 2020, the 2021 rate in 2021, and 0 in every other year. The COVID rows in the regression tables are the 2020 rate interacted with year, joined from `data/processed/ons_covid_by_area_20.csv` when the regression is estimated.
 
 ## Outputs
 

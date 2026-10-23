@@ -1,28 +1,36 @@
-## Project Structure
+## Project structure
 
 ```
 stunning-guacamole/
-├── data/                                 # shrunk and decoded data
-|   ├── processed
-|   |   ├── residence_quarter_panel.csv   # generated panel dataset
-|   |   └── residence_quarter_regression.csv
-|   └── quarterly_lfs_raw/*
+├── data/
+│   ├── processed/
+│   │   ├── residence_quarter_panel_full.csv   # written by pipeline/01_prep_data.R
+│   │   ├── residence_quarter_regression.csv   # written by pipeline/02_construct_variables.R
+│   │   ├── residence_annual_panel.csv
+│   │   ├── residence_annual_regression.csv
+│   │   ├── ons_covid_by_area_20.csv
+│   │   ├── residence_quarter_panel.csv        # older extract, 2010 Q1–2026 Q2
+│   │   └── residence_quarter_panel_v0.csv     # older extract, 2014 Q1–2026 Q2
+│   └── quarterly_lfs_raw/*                    # local safeguarded person files
 ├── docs/
-|   └── residence_quarter_regression.md
+│   ├── residence_quarter_regression.md
+│   └── residence_annual_regression.md
 ├── functions/
-|   ├── construct_variables.R
-|   ├── data_cleaners.R
-|   └── lfs_panel.R
+│   ├── construct_variables.R
+│   ├── construct_variables_annual.R
+│   ├── data_cleaners.R
+│   ├── lfs_panel.R
+│   └── lfs_panel_annual.R
 ├── notebooks/
 ├── pipeline/
+├── tests/
 ├── renv/
-├── .gitignore
 ├── main.R
 ├── README.md
 └── setup.R
-
-*File/Folder is stored locally as it contains safeguarded data
 ```
+
+`pipeline/02_construct_variables.R` reads `residence_quarter_panel_full.csv`. The two older extracts are not that input. `residence_quarter_panel_full.csv` and `residence_annual_panel.csv` are gitignored. The regression files and `ons_covid_by_area_20.csv` are tracked. The quarterly regression tables have 440 residence-quarters, 2021 Q1–2026 Q2. The annual regression tables have 100 residence-years, 2021–2025. The specifications are in the two design notes.
 
 ## Annual robustness check
 

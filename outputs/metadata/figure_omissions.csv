@@ -1,4 +1,4 @@
 figure,status,reason
 R05,not produced,Post-2021 sample-window re-estimates were not run. A window that drops 2021 cannot keep 2021 as the omitted COVID year.
-R07,not produced,"The four-quarter step-5 model was not estimated. Ethnicity, education, and age are stored as quarter-to-quarter changes only."
+R07,not produced,"The four-quarter step-5 model was not estimated. The regression file stores the levels and the quarter-to-quarter changes of ethnicity, education, and age. It does not store their four-quarter changes."
 R08,not produced,"No separate specification-stability figure. The main coefficient plot shows steps 0-6, and step 5 is the reference."

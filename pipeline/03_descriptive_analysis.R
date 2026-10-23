@@ -6,12 +6,12 @@
 # and the quarter-to-quarter changes in the seven UK-born controls.
 # The window is the whole file, 2006 Q1 through 2026 Q2.
 #
-# Each residence is a panel in one figure. The ratio levels give every
-# residence its own vertical scale. The quarter-to-quarter charts still
-# share a vertical scale within each figure, so a change in one area
-# lines up with the same change in another. National ratios are the same
-# in every area, so they are drawn once. They use the sum of area counts,
-# not the average of the area ratios.
+# Each residence is a panel in one figure. Ratio levels, and the EU and
+# non-EU quarter-to-quarter changes, give every residence its own vertical
+# scale. The other quarter-to-quarter residence charts share one vertical
+# scale, so a change in one area lines up with the same change in another.
+# National ratios are the same in every area, so they are drawn once. They
+# use the sum of area counts, not the average of the area ratios.
 #
 # The ratios and means are already weighted in the regression file. These
 # charts do not weight residences again.
@@ -26,9 +26,10 @@
 # is limited to +/- 0.2. Those quarters stay in the data and are named in
 # the caption.
 #
-# Charts after the original thirteen describe the 2017-2019 baseline and
-# the post-2021 estimation window. They read the regression file and the
-# COVID mortality file. They do not read coefficients or fitted models.
+# The residence charts above cover the whole file. The later charts
+# describe the 2017-2019 baseline and the post-2021 estimation window.
+# They read the regression file and the COVID mortality file. They do not
+# read coefficients or fitted models.
 
 source("setup.R")
 

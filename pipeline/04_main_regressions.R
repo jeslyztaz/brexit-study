@@ -8,8 +8,10 @@
 # Two designs, each estimated by OLS and 2SLS:
 #   pooled: one endogenous variable, d_qoq_ratio_migrant
 #   eu_non_eu: d_qoq_ratio_eu and d_qoq_ratio_non_eu in one equation
-# Controls are added in order: residence and year fixed effects, ethnicity,
-# the 2020 COVID mortality rate interacted with year, education, then age.
+# Controls are added in order: residence and year fixed effects, the
+# quarter-to-quarter ethnicity changes, the 2020 COVID mortality rate
+# interacted with year, the quarter-to-quarter education changes, then
+# d_qoq_mean_age_uk_born.
 # The last specification keeps those controls and uses period fixed effects
 # in place of year fixed effects. Period is the calendar quarter.
 #

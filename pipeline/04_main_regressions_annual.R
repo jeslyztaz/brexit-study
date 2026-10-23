@@ -14,8 +14,9 @@
 # Sample is 2021 onward (year > 2020), on complete calendar years only. An
 # incomplete year is already absent from the annual file. Controls are added
 # in the same order as the quarterly regression, through age: residence and
-# year fixed effects, ethnicity, the 2020 COVID mortality rate interacted
-# with year, education, then age. There is no further step. In this file the
+# year fixed effects, the one-year ethnicity changes, the 2020 COVID
+# mortality rate interacted with year, the one-year education changes, then
+# d_annual_mean_age_uk_born. There is no further step. In this file the
 # calendar year is the time unit, so year fixed effects are the period
 # fixed effects.
 #
